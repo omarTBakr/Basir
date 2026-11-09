@@ -1,8 +1,11 @@
 [project]
 name = "basir"
 version = "0.1.0"
-description = "Add your description here"
+description = "Spatial memory for a moving camera: remembers where it saw your things and guides you back to them."
 readme = "README.md"
+license = "LicenseRef-Proprietary"
+license-files = ["LICENSE"]
+classifiers = ["Private :: Do Not Upload"]
 requires-python = ">=3.12"
 dependencies = [
     "fastapi>=0.162.2",

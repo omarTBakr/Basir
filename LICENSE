@@ -1,0 +1,40 @@
+Proprietary License — All Rights Reserved
+
+Copyright (c) 2026 Omar Ayman Bakr. All rights reserved.
+
+This software and its associated files, including source code, configuration, documentation,
+design documents and diagrams, the Basir name and logo and other visual assets, data pipelines,
+and any data, 3D reconstructions, models, or other artifacts produced by it (together, the
+"Software"), are the exclusive property of the copyright holder.
+
+1. No license granted. Except as expressly permitted in a prior written agreement signed by the
+   copyright holder, no right or license is granted to any person, by implication, estoppel, or
+   otherwise.
+
+2. Prohibited without prior written permission. You may not, in whole or in part, for any
+   purpose (personal, educational, research, non-commercial, or commercial):
+     a. use, run, or execute the Software;
+     b. copy, reproduce, or download it, except as strictly required to view it on the platform
+        where it is hosted;
+     c. modify, adapt, translate, or create derivative works of it;
+     d. distribute, publish, sublicense, sell, rent, lend, or otherwise make it available to any
+        third party;
+     e. use it, or any output or data produced by it, to train, fine-tune, or evaluate any
+        machine-learning model, or to build a product or service.
+
+3. Permission requests. Requests for permission must be made in writing to the copyright holder
+   (https://github.com/omarTBakr). Permission is only valid if granted in writing, and only within
+   the scope and duration it states.
+
+4. Third-party components. Third-party libraries used by the Software remain under their own
+   licenses. This license covers only the copyright holder's own work.
+
+5. Termination. Any use outside a written permission is unauthorized and automatically
+   terminates any permission previously granted. On termination, you must stop all use and
+   destroy all copies in your possession.
+
+6. No warranty. THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+   IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
+   PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE COPYRIGHT HOLDER BE LIABLE FOR
+   ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
+   ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR ITS USE.

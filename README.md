@@ -245,4 +245,4 @@ Basir/
 
 **Proprietary — All Rights Reserved.** Copyright (c) 2026 Omar Ayman Bakr.
 
-This repository is published for viewing only. Using, running, copying, modifying or redistributing it, or using it or its outputs to train or evaluate machine-learning models, is not allowed without prior written permission. To request permission, contact [@omarTBakr](https://github.com/omarTBakr).
+This repository is published for viewing only. Using, running, copying, modifying or redistributing it (including the logo and design documents), or using it or its outputs to train or evaluate machine-learning models, is not allowed without prior written permission. See [LICENSE](LICENSE) for the full terms; to request permission, contact [@omarTBakr](https://github.com/omarTBakr).
