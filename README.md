@@ -31,7 +31,7 @@ Basir watches a moving camera and builds a **spatial memory** of the objects it 
 
 The deployment is a **phone + laptop** split. An Android phone running **ARCore** (realme 14 / 15) records video, its own 6-DoF pose and depth, and shows the answers. The laptop (RTX 4060, 8 GB) is the server that runs the models. No model is trained from scratch: detection, segmentation, embeddings and depth all come from pretrained models (Grounding DINO / YOLO-World, SAM 2/3, SigLIP 2, Depth Anything). The new work is the memory, the 3D fusion and the guidance.
 
-The stage built today is **Phase 0, the foundation**: replay a recorded RGB-D scene, turn depth and camera poses into a correct 3D point cloud, and *measure* that it's correct. Every direction Basir gives later depends on this geometry. The later phases are fully designed but not built yet. The roadmap is in [`PLAN.md`](PLAN.md), the background reading in [`STUDY.md`](STUDY.md), and the UML (user stories, use cases, sequence and class diagrams) in [`software_engineering/`](software_engineering/README.md).
+The stage built today is **Phase 0, the foundation**: replay a recorded RGB-D scene, turn depth and camera poses into a correct 3D point cloud, and *measure* that it's correct. Every direction Basir gives later depends on this geometry. The later phases are fully designed but not built yet. The phases are summarised in the [Roadmap](#roadmap), and the UML (user stories, use cases, sequence and class diagrams) is in [`software_engineering/`](software_engineering/README.md).
 
 - [Phase 0 check](#phase-0-check)
 - [Quickstart](#quickstart)
@@ -116,7 +116,7 @@ Notes:
 | `MLFLOW_TRACKING_URI` | Where runs are recorded (default: `sqlite:///<DATA_DIR>/mlflow.db`) |
 | `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY`, `LANGFUSE_BASE_URL` | Runtime tracing; off until both keys are set (default URL: Langfuse Cloud) |
 
-**Design constants** (keyframe thresholds, fusion gates, ranking weights, the household-noun list and the default camera) are read-only properties on `Settings`, with each value traced to [`PLAN.md`](PLAN.md). They move to `configs/default.yaml` in Phase 1, when they start needing tuning.
+**Design constants** (keyframe thresholds, fusion gates, ranking weights, the household-noun list and the default camera) are read-only properties on `Settings`, with each value traced to the design plan. They move to `configs/default.yaml` in Phase 1, when they start needing tuning.
 
 ## Features
 
@@ -205,7 +205,7 @@ uv run pytest -q             # offline suite (toy dataset, local HTTP server, te
 uv run pytest -q -m network  # live checks: every TUM preset URL, Langfuse auth
 ```
 
-There's one test file per module. The geometry tests are the ones PLAN.md calls mandatory.
+There's one test file per module. The geometry tests are mandatory: every later phase depends on them.
 
 ## Project structure
 
@@ -236,8 +236,6 @@ Basir/
 │   └── src/                        # generators that rebuild them from the Phase 0 scan
 ├── datasets/                       # downloaded sequences (git-ignored)
 ├── outputs/                        # point clouds and images (git-ignored)
-├── PLAN.md                         # design and phased roadmap
-├── STUDY.md                        # reading list
 └── pyproject.toml                  # dependencies (uv)
 ```
 

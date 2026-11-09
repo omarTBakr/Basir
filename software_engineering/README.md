@@ -1,9 +1,9 @@
 # Software engineering docs
 
 UML for Basir, written in PlantUML. Every `.puml` has its rendered `.png` committed next to it.
-Phase 0 code (`basir/core`, `basir/ingest`, `utilities/`) is in place; the other diagrams describe the **planned** design from [`PLAN.md`](../PLAN.md),
+Phase 0 code (`basir/core`, `basir/ingest`, `utilities/`) is in place; the other diagrams describe the **planned** design from the project's design plan,
 plus the deployment decision taken since: a realme phone running ARCore records and displays, and
-the laptop (RTX 4060, 8 GB) is the server. Class and module names match PLAN.md §5–6. Update a
+the laptop (RTX 4060, 8 GB) is the server. Class and module names match the planned package layout. Update a
 diagram in the same change as the code that makes it true or different.
 
 ## Observability
