@@ -1,0 +1,35 @@
+@startuml
+!include ../_style.iuml
+left to right direction
+title Use cases — Evaluation and development
+
+actor Developer as dev
+actor "TUM RGB-D\n(ground-truth pose + depth)" as tum <<system>>
+actor "Phone recordings\n(eval sessions)" as rec <<system>>
+
+rectangle "Evaluation and development" {
+  usecase "Replay a dataset\nat real-time speed" as UC_replay
+  usecase "Visualise the point cloud" as UC_cloud
+  usecase "Run geometry unit tests" as UC_tests
+  usecase "Label objects' true\npositions and queries" as UC_label
+  usecase "Run the evaluation" as UC_eval
+  usecase "Report metrics\n(Recall@k, 3D error, bearing,\nIoU, latency)" as UC_report
+  usecase "Visualise memory\n(tracks as labelled spheres)" as UC_vismem
+  usecase "Profile GPU and latency" as UC_profile
+}
+
+UC_replay <-- dev
+UC_tests <-- dev
+UC_label <-- dev
+UC_eval <-- dev
+UC_profile <-- dev
+
+UC_cloud .> UC_replay : <<extend>>\n[Phase 0 check]
+UC_eval ..> UC_replay : <<include>>
+UC_eval ..> UC_report : <<include>>
+UC_vismem .> UC_eval : <<extend>>
+
+UC_replay --> tum
+UC_replay --> rec
+UC_label --> rec
+@enduml

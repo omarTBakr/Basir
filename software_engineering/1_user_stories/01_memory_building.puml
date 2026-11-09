@@ -1,0 +1,43 @@
+@startuml
+!include ../_style.iuml
+title Epic 1 — Building the spatial memory
+
+rectangle "Memory building" {
+  card US1_1 [
+    **US-1.1  Basir remembers without being asked**
+    As a //user//, I want Basir to keep remembering what the camera sees while I walk around,
+    so that it can find things I never told it to look for.
+    ----
+    * The phone streams continuously; ingest never blocks and drops frames under load.
+    * Keyframes are kept (1–3 per second, or when the view or pose changes enough), not every frame.
+    * Memory covers minutes to hours, not only the last few seconds.
+  ]
+  card US1_2 [
+    **US-1.2  Objects, not just frames**
+    As a //user//, I want small objects (keys, remote, mug) remembered on their own,
+    so that they are found even when they fill a tiny part of the picture.
+    ----
+    * Each keyframe is run through an open-vocabulary detector with ~200 household nouns.
+    * Every detection gets a SAM mask and a SigLIP embedding of its crop (an Observation).
+  ]
+  card US1_3 [
+    **US-1.3  Each object has a place in the room**
+    As a //user//, I want every remembered object to have a 3D position,
+    so that Basir can tell me where it is from where I stand now.
+    ----
+    * Position = median masked depth back-projected with the frame's camera pose.
+    * Pose and depth come from ARCore on the phone (or dataset ground truth in development).
+  ]
+  card US1_4 [
+    **US-1.4  One object, one memory entry**
+    As a //user//, I want the same bottle seen 50 times to be one object,
+    so that answers are not cluttered with duplicates.
+    ----
+    * A new observation joins a track if embedding similarity > τ_sim and distance < τ_dist (≈0.5 m).
+    * A track keeps first_seen, last_seen, a running position and its clearest crop.
+  ]
+}
+US1_1 -[hidden]down- US1_2
+US1_2 -[hidden]down- US1_3
+US1_3 -[hidden]down- US1_4
+@enduml

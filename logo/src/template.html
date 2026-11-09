@@ -1,0 +1,157 @@
+<title>Basir Logo Concepts</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Readex+Pro:wght@300;500;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: a design board. Each family pairs its 3D view with its top view, side by side, then a strip of sizes, tiles and lockups. */
+:root {
+  --bg: #eef1ef;
+  --surface: #f9fbfa;
+  --fg: #15212b;
+  --muted: #5d6b72;
+  --line: #d3dbd8;
+  --ink: #15212b;
+  --paper: #f9fbfa;
+  --route: #12a39a;
+  --target: #f08a24;
+  --display: "Readex Pro", "Segoe UI", system-ui, sans-serif;
+  --body: "Readex Pro", "Segoe UI", system-ui, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0f171d; --surface: #16212a; --fg: #e6ecea; --muted: #93a2a8; --line: #26343e;
+    --ink: #e6ecea; --paper: #16212a; --route: #2cc7bc; --target: #ff9d42;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0f171d; --surface: #16212a; --fg: #e6ecea; --muted: #93a2a8; --line: #26343e;
+  --ink: #e6ecea; --paper: #16212a; --route: #2cc7bc; --target: #ff9d42;
+  color-scheme: dark;
+}
+body { background: var(--bg); color: var(--fg); font-family: var(--body); line-height: 1.55; }
+.wrap {
+  max-width: 1120px; margin: 0 auto; padding-block: 40px 64px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  display: grid; gap: 28px;
+}
+header { display: grid; gap: 10px; max-width: 70ch; }
+.eyebrow { font-family: var(--mono); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+h1 { font-family: var(--display); font-weight: 700; font-size: clamp(28px, 4vw, 40px); line-height: 1.1; margin: 0; text-wrap: balance; }
+h1 span { font-weight: 300; }
+header p { margin: 0; color: var(--muted); }
+.legend { display: flex; flex-wrap: wrap; gap: 8px 18px; font-family: var(--mono); font-size: 12px; color: var(--muted); }
+.legend i { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; vertical-align: -1px; }
+
+.family { background: var(--surface); border: 1px solid var(--line); border-radius: 18px; padding: 24px; display: grid; gap: 20px; }
+.family-head { display: grid; gap: 6px; max-width: 72ch; }
+.tag { font-family: var(--mono); font-size: 12px; color: var(--muted); letter-spacing: .06em; }
+h2 { font-family: var(--display); font-weight: 500; font-size: 22px; margin: 0; text-wrap: balance; }
+.family-head p { margin: 0; }
+.pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+figure { margin: 0; display: grid; gap: 8px; }
+.stage { aspect-ratio: 1; max-width: 100%; background: var(--bg); border-radius: 14px; display: grid; place-items: center; overflow: hidden; }
+.stage > svg, .stage > .scan { width: 88%; height: 88%; }
+figcaption { font-family: var(--mono); font-size: 12px; color: var(--muted); }
+.strip { display: flex; flex-wrap: wrap; gap: 14px; align-items: end; }
+.size { display: grid; gap: 6px; justify-items: center; font-family: var(--mono); font-size: 11px; color: var(--muted); }
+.size > svg, .size > .scan { display: block; }
+.dark-tile, .light-tile { border-radius: 14px; padding: 10px; display: grid; place-items: center; }
+.dark-tile { --ink: #e6ecea; --paper: #15212b; --route: #2cc7bc; --target: #ff9d42; background: #15212b; }
+.light-tile { --ink: #15212b; --paper: #f9fbfa; --route: #12a39a; --target: #f08a24; background: #f9fbfa; border: 1px solid #d3dbd8; }
+.lockup { display: flex; align-items: center; gap: 12px; padding: 10px 16px; background: var(--bg); border-radius: 12px; }
+.lockup > svg, .lockup > .scan { width: 52px; height: 52px; flex: none; }
+.word { font-family: var(--display); font-weight: 700; font-size: 26px; letter-spacing: -.01em; line-height: 1; }
+.word small { font-weight: 300; font-size: 22px; margin-inline-start: 8px; color: var(--muted); }
+.note { color: var(--muted); font-size: 14px; margin: 0; max-width: 72ch; }
+
+.scan { position: relative; aspect-ratio: 1; }
+.scan-dots { position: absolute; left: 0; top: 16%; width: 84%; height: 84%; background: var(--ink); -webkit-mask-size: 100% 100%; mask-size: 100% 100%; }
+.scan > svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+
+footer { color: var(--muted); font-size: 14px; max-width: 72ch; display: grid; gap: 8px; }
+footer strong { color: var(--fg); font-weight: 500; }
+
+@media (max-width: 680px) {
+  .pair { grid-template-columns: minmax(0, 1fr); }
+  .family { padding: 16px; }
+}
+</style>
+
+<main class="wrap">
+  <header>
+    <div class="eyebrow">Basir · identity · round 2</div>
+    <h1>Real 3D rooms, <span>seen from the side and from above</span></h1>
+    <p>Every mark here is projected from actual 3D geometry instead of drawn by hand. Two scenes are modelled as boxes in metres: a cluttered room and a four-room apartment. The third is the real room Basir reconstructed from the TUM fr1 sequence in Phase 0. Each one gets a 3D view and a top view of the same scene, with Basir's bubble pointing at the object and the route to it.</p>
+    <div class="legend">
+      <span><i style="background:var(--ink)"></i>ink · the room and Basir</span>
+      <span><i style="background:var(--route)"></i>teal · the route from where you stand</span>
+      <span><i style="background:var(--target)"></i>amber · the object you asked for</span>
+    </div>
+  </header>
+
+  <section class="family" aria-labelledby="f1">
+    <div class="family-head">
+      <div class="tag">1 · CLUTTERED ROOM · 5 × 4 m</div>
+      <h2 id="f1">A messy bedroom-office, and the mug Basir found in it</h2>
+      <p>Bed, shelf, desk with monitor, chair, lamp, plant, a rug, a coffee table and boxes scattered on the floor. The 3D view is a true isometric projection drawn back to front, so objects hide the route where they'd really block it. The top view is the same room as a floor plan.</p>
+    </div>
+    <div class="pair">
+      <figure><div class="stage">{{room_iso}}</div><figcaption>3D view (isometric)</figcaption></figure>
+      <figure><div class="stage">{{room_top}}</div><figcaption>Top view (floor plan)</figcaption></figure>
+    </div>
+    <div class="strip">
+      <div class="size"><svg width="64" height="64" viewBox="0 0 120 120">{{room_iso_plain}}</svg>3D · 64</div>
+      <div class="size"><svg width="32" height="32" viewBox="0 0 120 120">{{room_iso_plain}}</svg>32</div>
+      <div class="size"><svg width="64" height="64" viewBox="0 0 120 120">{{room_tile}}</svg>plan tile · 64</div>
+      <div class="size"><svg width="32" height="32" viewBox="0 0 120 120">{{room_tile}}</svg>32</div>
+      <div class="light-tile"><svg width="64" height="64" viewBox="0 0 120 120">{{room_iso}}</svg></div>
+      <div class="dark-tile"><svg width="64" height="64" viewBox="0 0 120 120">{{room_iso}}</svg></div>
+      <div class="lockup"><svg viewBox="0 0 120 120">{{room_iso_plain}}</svg><div class="word">Basir<small>بصير</small></div></div>
+    </div>
+    <p class="note">Reads best from 64 px up. Below that, use the plan tile: it keeps the walls, the route and the amber dot.</p>
+  </section>
+
+  <section class="family" aria-labelledby="f2">
+    <div class="family-head">
+      <div class="tag">2 · APARTMENT · 9 × 7 m</div>
+      <h2 id="f2">From the front door to the keys on the bedroom desk</h2>
+      <p>Kitchen, living room, bedroom and bath, with the interior walls cut low like a dollhouse so every room stays visible. The route starts at the front door, passes the coffee table and dining chairs, goes through the bedroom door, and ends at the desk.</p>
+    </div>
+    <div class="pair">
+      <figure><div class="stage">{{apt_iso}}</div><figcaption>3D view (dollhouse cutaway)</figcaption></figure>
+      <figure><div class="stage">{{apt_top}}</div><figcaption>Top view (floor plan)</figcaption></figure>
+    </div>
+    <div class="strip">
+      <div class="size"><svg width="64" height="64" viewBox="0 0 120 120">{{apt_iso_plain}}</svg>3D · 64</div>
+      <div class="size"><svg width="32" height="32" viewBox="0 0 120 120">{{apt_iso_plain}}</svg>32</div>
+      <div class="size"><svg width="64" height="64" viewBox="0 0 120 120">{{apt_tile}}</svg>plan tile · 64</div>
+      <div class="size"><svg width="32" height="32" viewBox="0 0 120 120">{{apt_tile}}</svg>32</div>
+      <div class="light-tile"><svg width="64" height="64" viewBox="0 0 120 120">{{apt_iso}}</svg></div>
+      <div class="dark-tile"><svg width="64" height="64" viewBox="0 0 120 120">{{apt_iso}}</svg></div>
+      <div class="lockup"><svg viewBox="0 0 120 120">{{apt_tile}}</svg><div class="word">Basir<small>بصير</small></div></div>
+    </div>
+    <p class="note">The longer route tells the guidance story best ("go through the living room, then the bedroom door"). The plan tile works as the phone app icon.</p>
+  </section>
+
+  <section class="family" aria-labelledby="f3">
+    <div class="family-head">
+      <div class="tag">3 · THE REAL SCAN · TUM FR1/ROOM</div>
+      <h2 id="f3">The room Basir actually rebuilt in Phase 0</h2>
+      <p>These are the 422,032 points from your fr1/room reconstruction: walls, desks, chairs and clutter, with the floor faded so the objects stand out. The amber target sits on the real table surface (the 0.77 m plane), and the route starts where the camera's walk ended.</p>
+    </div>
+    <div class="pair">
+      <figure><div class="stage">{{real_oblique}}</div><figcaption>3D view (oblique, from the scan)</figcaption></figure>
+      <figure><div class="stage">{{real_top}}</div><figcaption>Top view (from the scan)</figcaption></figure>
+    </div>
+    <p class="note">The most authentic option: the logo is Basir's own output. It's too detailed for an icon, so use it as the README hero or a banner, with family 1 or 2 as the small mark.</p>
+  </section>
+
+  <footer>
+    <p><strong>Picking one:</strong> family 1 is closest to "a scattered room". Family 2 tells the longest guidance story and has the best app icon. Family 3 is the real scan, best as a hero image next to a simpler mark.</p>
+    <p><strong>Next round:</strong> once you pick, I'll tune the furniture layout, add a gentle animation (the route drawing itself, then the target pulsing) and export SVG and PNG sizes for the README and the app.</p>
+  </footer>
+</main>

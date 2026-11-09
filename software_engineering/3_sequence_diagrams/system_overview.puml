@@ -1,0 +1,60 @@
+@startuml
+!include ../_style.iuml
+title Whole system — remember, ask, get directions, find it
+autonumber "<b>0"
+
+actor User as user
+participant "Phone app\n(realme + ARCore)" as phone
+participant "FastAPI server\n(WebSocket)" as api
+queue "Keyframe queue" as kq
+participant "Perception worker" as perc
+database "Spatial memory\n(Qdrant + keyframes on disk)" as mem
+participant "Query engine" as query
+participant "LLM / VLM\n(Claude API or local)" as llm
+participant "Guidance loop" as guide
+
+== Remember (always running) ==
+user -> phone : walks around
+loop every camera frame
+  phone -> api : JPEG + pose + depth + K
+  api -> api : KeyframeSelector (time / motion / view change)
+  opt keyframe
+    api -> kq : enqueue (drop oldest if full)
+  end
+end
+kq -> perc : keyframe
+perc -> perc : detect → segment → embed crops
+perc -> perc : back-project masks → 3D world positions
+perc -> mem : fuse into ObjectTracks; save keyframe JPEG
+
+== Ask ==
+user -> phone : "Where is my water bottle?"
+phone -> api : query
+api -> query : ask(text, current pose)
+query -> llm : parse → {object, attributes, time, place}
+query -> mem : retrieve top-k tracks
+query -> llm : verify candidate crops
+query -> query : rank; bearing + distance from current pose
+query --> api : QueryResult
+api --> phone : "Turn right ~120°, ~2.3 m, on the desk, 45 s ago" + keyframe
+note over phone, api
+  A single phone WebSocket carries frames up and answers down.
+  Frames keep streaming during the query, so memory keeps updating.
+end note
+
+== Guide until found ==
+api -> guide : start(track)
+loop every pose update
+  guide -> guide : recompute directions
+  guide --> phone : directions
+  opt object projects inside the image
+    guide -> guide : detect in region → SAM mask → embedding check
+    alt confirmed
+      guide --> phone : "Found it!" + mask (then SAM video tracking)
+    else not there
+      guide -> mem : mark track stale
+      guide --> phone : "It may have moved" + next candidate
+    end
+  end
+end
+@enduml
