@@ -245,4 +245,6 @@ Basir/
 
 **Proprietary — All Rights Reserved.** Copyright (c) 2026 Omar Ayman Bakr.
 
-This repository is published for viewing only. Using, running, copying, modifying or redistributing it (including the logo and design documents), or using it or its outputs to train or evaluate machine-learning models, is not allowed without prior written permission. See [LICENSE](LICENSE) for the full terms; to request permission, contact [@omarTBakr](https://github.com/omarTBakr).
+This repository is public so that it can be **viewed**. Viewing it grants no rights. Without prior written permission you may not use, run, clone, copy, modify, fork outside GitHub, or redistribute any part of it, including the code, design documents, the Basir name and logo, and the 3D reconstructions. You also may not use it, or anything it produces, to train, fine-tune, evaluate or prompt AI / ML models, or include it in any dataset. A GitHub fork carries no right to use it.
+
+See [LICENSE](LICENSE) for the full terms; to request permission, contact [@omarTBakr](https://github.com/omarTBakr).
