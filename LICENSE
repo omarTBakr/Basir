@@ -1,0 +1,99 @@
+Basir Proprietary License — All Rights Reserved
+
+Copyright (c) 2026 Omar Ayman Bakr. All rights reserved.
+
+This repository is publicly visible so that it can be viewed. Being able to see it grants you
+no right to use it. Read this license in full before doing anything other than viewing it.
+
+1. Definitions.
+   a. "Software" means everything in this repository and its history, in any form and in whole
+      or in part: source code, configuration, scripts, tests, documentation, plans, design
+      documents and diagrams, the Basir name and logo and all other visual assets, datasets
+      prepared by it, 3D reconstructions, models, outputs, and any other artifact produced by
+      running or studying it.
+   b. "Use" means any act beyond viewing, including running, executing, installing, building,
+      copying, downloading, cloning, storing, modifying, translating, adapting, incorporating,
+      distributing, publishing, sublicensing, selling, renting, lending, hosting, or making
+      available to anyone, by any means.
+   c. "Copyright holder" means Omar Ayman Bakr.
+
+2. No license granted. Except as expressly permitted in a prior written agreement signed by the
+   copyright holder, no right or license of any kind is granted to any person, by implication,
+   estoppel, or otherwise. All rights not expressly granted in such an agreement are reserved.
+
+3. Prohibited without prior written permission. You may not, in whole or in part, for any
+   purpose (personal, educational, academic, research, non-commercial, or commercial):
+     a. Use the Software;
+     b. create derivative works of it, or works substantially similar to it in structure,
+        design, or expression;
+     c. reverse engineer, decompile, or disassemble any part of it, except where applicable
+        law expressly permits this despite this restriction;
+     d. use the Basir name, the logo, or any confusingly similar name or mark, for any product,
+        service, project, or publication;
+     e. use it in, or as part of, any product, service, demonstration, competition entry,
+        thesis, course work, or paper.
+
+4. No artificial intelligence or machine-learning use. Without prior written permission you may
+   not, directly or through any third party or automated system:
+     a. use the Software, or any output or data produced by it, to train, pre-train, fine-tune,
+        distill, evaluate, benchmark, or otherwise improve any machine-learning or AI model;
+     b. include it in any dataset, corpus, or collection used for those purposes;
+     c. scrape, crawl, mirror, index, or bulk-download it for those purposes;
+     d. convert it into embeddings, vector stores, or retrieval indexes, or supply it as
+        context, prompts, or examples to any AI system, other than an assistant you run solely
+        to read it for yourself;
+     e. use it to generate code, designs, or text that reproduces or imitates it.
+
+5. Public visibility and forks. The Software is hosted publicly on GitHub. To the extent GitHub's
+   Terms of Service allow other GitHub users to view this repository or fork it within GitHub,
+   that is the only permission given, and only for viewing within GitHub. A fork carries no
+   right to Use the Software. You may not run, modify, or publish a fork, or move its contents
+   outside GitHub.
+
+6. Notices. You may not remove, alter, or obscure any copyright notice, this license, or any
+   attribution in the Software.
+
+7. No trademark or patent rights. Nothing in this license grants any right to the Basir name,
+   the logo, or any trademark, trade dress, or patent of the copyright holder.
+
+8. Contributions. If you submit any issue, comment, suggestion, or code to this repository, you
+   grant the copyright holder a perpetual, worldwide, irrevocable, royalty-free right to use it
+   for any purpose, and you confirm that you have the right to grant it. Submitting a
+   contribution gives you no right to Use the Software.
+
+9. Permission requests. Requests for permission must be made in writing to the copyright holder
+   (https://github.com/omarTBakr). Permission is valid only if granted in writing, and only
+   within the scope, purpose, and duration it states. It cannot be transferred.
+
+10. Third-party components. Third-party libraries and datasets used by the Software (for
+    example the TUM RGB-D benchmark) remain under their own licenses and terms. This license
+    covers only the copyright holder's own work.
+
+11. Termination. Any Use outside a written permission is unauthorized and automatically
+    terminates any permission previously granted, without notice. On termination you must stop
+    all Use and permanently delete all copies in your possession or control, including forks,
+    clones, backups, datasets, and models derived from the Software.
+
+12. Enforcement. Unauthorized Use infringes the copyright holder's rights. The copyright holder
+    may seek every remedy available under applicable law, including injunctive relief, damages,
+    and recovery of costs. Unauthorized Use would cause harm that money alone cannot fully
+    remedy.
+
+13. No warranty. THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
+    PARTICULAR PURPOSE, AND NONINFRINGEMENT.
+
+14. Limitation of liability. TO THE MAXIMUM EXTENT PERMITTED BY LAW, IN NO EVENT SHALL THE
+    COPYRIGHT HOLDER BE LIABLE FOR ANY CLAIM, DAMAGES, OR OTHER LIABILITY, WHETHER DIRECT,
+    INDIRECT, INCIDENTAL, SPECIAL, OR CONSEQUENTIAL, AND WHETHER IN AN ACTION OF CONTRACT, TORT,
+    OR OTHERWISE, ARISING FROM, OUT OF, OR IN CONNECTION WITH THE SOFTWARE OR ITS USE.
+
+15. Indemnity. If you Use the Software in breach of this license, you agree to indemnify the
+    copyright holder against any claims, losses, and costs, including reasonable legal fees,
+    arising from that Use.
+
+16. General. If any provision of this license is held unenforceable, it shall be enforced to
+    the maximum extent permitted, and the remaining provisions stay in full effect. Failure or
+    delay in enforcing any provision is not a waiver of it. This license is governed by the
+    laws of the Arab Republic of Egypt, without regard to conflict-of-law rules, and does not
+    limit any right the copyright holder has under copyright law in any country.

@@ -1,0 +1,37 @@
+@startuml
+!include ../_style.iuml
+left to right direction
+title Use cases — Asking "where is my ...?"
+
+actor User as user
+actor "LLM\n(query parser)" as llm <<system>>
+actor "VLM\n(reranker)" as vlm <<system>>
+actor "SigLIP 2\n(text embedding)" as emb <<system>>
+
+rectangle "Querying" {
+  usecase "Ask where an object is" as UC_ask
+  usecase "Parse the question\n(object, attributes, time, place)" as UC_parse
+  usecase "Retrieve candidate tracks\n(vector + keyword + filters)" as UC_retrieve
+  usecase "Verify candidates\nby looking at the crops" as UC_verify
+  usecase "Rank: similarity, verification,\nrecency, stale" as UC_rank
+  usecase "Compute bearing, distance,\nheight from current pose" as UC_dir
+  usecase "Answer: text + keyframe\n+ directions" as UC_answer
+  usecase "Mention other sightings" as UC_others
+  usecase "Say it was never seen" as UC_none
+}
+
+user --> UC_ask
+
+UC_ask ..> UC_parse : <<include>>
+UC_parse ..> UC_retrieve : <<include>>
+UC_retrieve ..> UC_verify : <<include>>
+UC_verify ..> UC_rank : <<include>>
+UC_rank ..> UC_dir : <<include>>
+UC_dir ..> UC_answer : <<include>>
+UC_others .> UC_answer : <<extend>>\n[sightings disagree]
+UC_none .> UC_retrieve : <<extend>>\n[no candidate]
+
+UC_parse --> llm
+UC_retrieve --> emb
+UC_verify --> vlm
+@enduml
