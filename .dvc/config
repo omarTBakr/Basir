@@ -1,0 +1,7 @@
+[core]
+    autostage = false
+    remote = local
+[cache]
+    type = hardlink
+['remote "local"']
+    url = /run/media/omar/My Passport/dvc-remotes/Basir

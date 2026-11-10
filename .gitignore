@@ -13,7 +13,8 @@ wheels/
 .env
 
 # Data, models and runtime output (kept on disk, never committed)
-/datasets/
+# datasets/<sequence>/ folders stay out of git; DVC versions them (datasets/*.dvc are committed)
+/datasets/?*/
 _archives/
 weights/
 logs/

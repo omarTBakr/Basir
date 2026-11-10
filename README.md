@@ -36,6 +36,7 @@ The stage built today is **Phase 0, the foundation**: replay a recorded RGB-D sc
 - [Phase 0 check](#phase-0-check)
 - [Quickstart](#quickstart)
 - [Configuration](#configuration)
+- [Data versioning (DVC)](#data-versioning-dvc)
 - [Features](#features)
 - [Roadmap](#roadmap)
 - [Architecture](#architecture)
@@ -78,6 +79,7 @@ uv run python scripts/check_env.py                     # versions, CUDA check, r
 
 uv run python scripts/download_dataset.py fr1/desk     # 328 MB
 uv run python scripts/download_dataset.py fr1/room     # 746 MB
+# or, on this machine: uv run dvc pull                 # restore both from the DVC remote
 
 uv run python scripts/replay.py fr1/desk               # RGB + depth at real-time speed
 uv run python scripts/visualize_pointcloud.py fr1/room # the Phase 0 check
@@ -96,6 +98,7 @@ Notes:
 - **Prerequisites:** Linux, [uv](https://docs.astral.sh/uv/) (it installs Python 3.12) and an NVIDIA GPU with a recent driver. Developed on an RTX 4060 Laptop (8 GB).
 - **Replay keys:** space pauses, `q` or Esc quits.
 - **Datasets are big and git-ignored.** They go to `datasets/` (or `$DATA_DIR/datasets`), with the archives in `datasets/_archives/`. An interrupted download resumes on the next run and is never mistaken for a finished one.
+- **The two Phase 0 sequences are versioned with DVC.** `uv run dvc pull` restores the exact versions from the local DVC remote instead of downloading them again (see [Data versioning](#data-versioning-dvc)).
 - **A preset that isn't downloaded yet** makes `replay.py` and `visualize_pointcloud.py` stop with the exact download command to run.
 - **The toy dataset** (`download_dataset.py --create-toy-dataset --name toy_room`) is a tiny synthetic TUM-format scene used by the tests. It's handy for trying the scripts offline.
 
@@ -112,6 +115,25 @@ Notes:
 | `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY`, `LANGFUSE_BASE_URL` | Runtime tracing; off until both keys are set (default URL: Langfuse Cloud) |
 
 The default camera (TUM / Kinect v1 intrinsics) is a read-only property on `Settings`, used when a dataset has no calibration of its own.
+
+## Data versioning (DVC)
+
+[DVC](https://dvc.org) versions the datasets Basir is checked against, so every result traces back to the exact data it came from. Git holds only small `.dvc` pointer files; the data itself stays out of git.
+
+```bash
+uv run dvc pull      # restore the tracked datasets from the remote
+uv run dvc status    # did the datasets on disk change since the last dvc add?
+uv run dvc status -c # is the remote in sync with the pointers?
+uv run dvc add datasets/rgbd_dataset_freiburg1_desk   # record a new version after a change
+uv run dvc push      # upload that version to the remote
+```
+
+| Tracked path | Pointer |
+|---|---|
+| `datasets/rgbd_dataset_freiburg1_desk/` | `datasets/rgbd_dataset_freiburg1_desk.dvc` |
+| `datasets/rgbd_dataset_freiburg1_room/` | `datasets/rgbd_dataset_freiburg1_room.dvc` |
+
+Each dataset has its own pointer, so you can pull one alone (`uv run dvc pull datasets/rgbd_dataset_freiburg1_desk.dvc`). The default remote `local` is a folder on the same drive, outside the repo: `/run/media/omar/My Passport/dvc-remotes/Basir`. Nothing is uploaded off the machine. The cache uses hardlinks (`cache.type = hardlink`), so the data is not stored twice on the drive. Tracked files are read-only as a result: run `uv run dvc unprotect <path>` before editing one. DVC does not track the archives in `datasets/_archives/` (they duplicate the extracted folders), `outputs/` (rebuilt by `visualize_pointcloud.py`), the MLflow store or `.env`.
 
 ## Features
 
@@ -252,6 +274,8 @@ Basir/
 ├── logo/                           # logo (scan + chat) and README image, light / dark SVG + PNG
 │   └── src/                        # generators that rebuild them from the Phase 0 scan
 ├── datasets/                       # downloaded sequences (git-ignored)
+│   └── *.dvc                       # DVC pointers to the tracked sequences
+├── .dvc/                           # DVC config (remote) and local cache
 ├── outputs/                        # point clouds and images (git-ignored)
 └── pyproject.toml                  # dependencies (uv)
 ```
