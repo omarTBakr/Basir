@@ -34,3 +34,6 @@ outputs/
 # Private planning documents (kept locally, not published)
 PLAN.md
 STUDY.md
+
+# Claude Code: project skills, agent worktrees and local settings (kept locally)
+.claude/
