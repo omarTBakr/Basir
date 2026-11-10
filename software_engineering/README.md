@@ -17,7 +17,7 @@ _Last updated: 2026-11-10._ ✅ built on [`phase_0`](https://github.com/omarTBak
 | Data versioning | — | 🔄 DVC done on `dvc_setup` (awaiting review): one `.dvc` per TUM sequence, local remote `dvc-remotes/Basir` |
 | Replay and evaluation | [replay_eval](3_sequence_diagrams/replay_eval.png), [evaluation](2_use_case_diagrams/evaluation.png) | ✅ replay, point-cloud check with MLflow; 🔄 Temporal pipeline DAG (`pipeline_dag`) |
 | Multi-phone streaming | [phone_stream](3_sequence_diagrams/phone_stream.png), [phone_app](2_use_case_diagrams/phone_app.png) | 🔄 server-side ingest + GPU micro-batching (`server_ui`); phone app ⏳ |
-| Server, UI and observability | system overviews | 🔄 FastAPI UI, Prometheus, Grafana (`server_ui`, `infra_stack`) |
+| Server, UI and observability | system overviews | 🔄 Docker stack done on `infra_stack` (awaiting review): Postgres, MLflow on Postgres, Temporal, Prometheus, Grafana dashboards; FastAPI UI 🔄 (`server_ui`) |
 | Memory building, querying, guidance | [ingest_keyframe](3_sequence_diagrams/ingest_keyframe.png), [query_where_is](3_sequence_diagrams/query_where_is.png), [guidance_reacquire](3_sequence_diagrams/guidance_reacquire.png), [perception](4_class_diagrams/perception.png), [memory](4_class_diagrams/memory.png), [query_and_guidance](4_class_diagrams/query_and_guidance.png) | ⏳ Phases 1–5 |
 | Robot integration | [06_robot_integration](1_user_stories/06_robot_integration.png) | ⏳ Phase 7 |
 
