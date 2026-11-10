@@ -13,7 +13,7 @@ wheels/
 .env
 
 # Data, models and runtime output (kept on disk, never committed)
-datasets/
+/datasets/
 _archives/
 weights/
 logs/
