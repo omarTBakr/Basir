@@ -1,8 +1,10 @@
 """Experiment tracking with MLflow: one run per script execution or evaluation.
 
 Scripts use this module instead of importing mlflow directly, so the tracking
-location, standard tags and failure handling live in one place. Logging problems
-(for example a locked database) produce one warning and never stop the run.
+location, standard tags and failure handling live in one place. The store is either
+local SQLite (artifacts in mlartifacts/) or the stack's MLflow server, which keeps
+artifacts itself. Logging problems (for example a locked database or an unreachable
+server) produce one warning and never stop the run.
 
     with start_run("phase0-pointcloud", run_name="fr1_room", tags={"dataset": "fr1/room"}):
         log_params({"every": 15})
@@ -38,8 +40,7 @@ def start_run(experiment: str, run_name: str | None = None, tags: dict[str, str]
         settings = get_settings()
         mlflow.set_tracking_uri(settings.mlflow_uri)
         if mlflow.get_experiment_by_name(experiment) is None:
-            settings.mlflow_artifacts_dir.mkdir(parents=True, exist_ok=True)
-            mlflow.create_experiment(experiment, artifact_location=settings.mlflow_artifacts_dir.as_uri())
+            mlflow.create_experiment(experiment, artifact_location=_artifact_location())
         mlflow.set_experiment(experiment)
         run = mlflow.start_run(run_name=run_name, tags={**_standard_tags(), **(tags or {})})
         _active = True
@@ -67,6 +68,15 @@ def log_metrics(metrics: dict[str, float], step: int | None = None) -> None:
 def log_artifact(path: str | Path, artifact_path: str | None = None) -> None:
     if _active and Path(path).exists():
         _safe(mlflow.log_artifact, str(path), artifact_path)
+
+
+def _artifact_location() -> str | None:
+    """None for a tracking server (it stores artifacts itself), else the local mlartifacts/ folder."""
+    settings = get_settings()
+    if settings.mlflow_uri.startswith(("http://", "https://")):
+        return None
+    settings.mlflow_artifacts_dir.mkdir(parents=True, exist_ok=True)
+    return settings.mlflow_artifacts_dir.as_uri()
 
 
 def _standard_tags() -> dict[str, str]:

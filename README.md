@@ -81,7 +81,7 @@ uv run python scripts/download_dataset.py fr1/room     # 746 MB
 
 uv run python scripts/replay.py fr1/desk               # RGB + depth at real-time speed
 uv run python scripts/visualize_pointcloud.py fr1/room # the Phase 0 check
-uv run mlflow ui --backend-store-uri "sqlite:///$(pwd)/mlflow.db"   # browse the runs
+scripts/stack.sh up                                    # MLflow, Temporal, Grafana, ... (see Local stack)
 
 # variants
 uv run python scripts/download_dataset.py --list-presets                  # every TUM sequence
@@ -108,7 +108,8 @@ Notes:
 | `APP_ENV` | `development`, `staging` or `production`; also tags Langfuse traces |
 | `DEVICE` | `auto`, `cuda`, `cpu` or `mps`; `auto` picks CUDA when available |
 | `DATA_DIR` | Root for `datasets/`, `outputs/`, `mlflow.db` and `mlartifacts/` (default: the project folder) |
-| `MLFLOW_TRACKING_URI` | Where runs are recorded (default: `sqlite:///<DATA_DIR>/mlflow.db`) |
+| `MLFLOW_TRACKING_URI` | Where runs are recorded: `http://127.0.0.1:5000` for the [local stack](#local-stack) (default: `sqlite:///<DATA_DIR>/mlflow.db`) |
+| `PROMETHEUS_URL` | Prometheus of the local stack (default: `http://127.0.0.1:9090`) |
 | `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY`, `LANGFUSE_BASE_URL` | Runtime tracing; off until both keys are set (default URL: Langfuse Cloud) |
 
 The default camera (TUM / Kinect v1 intrinsics) is a read-only property on `Settings`, used when a dataset has no calibration of its own.
@@ -192,12 +193,78 @@ flowchart TB
 
 Full detail: [class diagrams](https://github.com/omarTBakr/Basir/tree/software_engineering/software_engineering/4_class_diagrams/) (start with [system_overview](https://github.com/omarTBakr/Basir/blob/software_engineering/software_engineering/4_class_diagrams/system_overview.png)) and [sequence diagrams](https://github.com/omarTBakr/Basir/tree/software_engineering/software_engineering/3_sequence_diagrams/).
 
+## Local stack
+
+One Docker Compose file runs the services around Basir: experiment tracking, the workflow engine and monitoring. Everything binds to `127.0.0.1`, images are pinned, every container has a healthcheck, and data lives in named volumes (MLflow artifacts stay on the host, in `mlartifacts/`).
+
+```bash
+scripts/stack.sh up        # build, start, wait until every container is healthy
+scripts/stack.sh status    # containers, URLs and Prometheus target health
+scripts/stack.sh logs mlflow
+scripts/stack.sh down      # stop; volumes are kept
+```
+
+| Service | URL | What it does |
+|---|---|---|
+| **MLflow** | http://127.0.0.1:5000 | Tracking server on Postgres; migrates its schema on start and stores artifacts in `mlartifacts/` |
+| **Temporal** | `127.0.0.1:7233` (gRPC), UI http://127.0.0.1:8233 | Workflow engine for pipelines (auto-setup on Postgres) |
+| **Grafana** | http://127.0.0.1:3000 | Dashboards; anonymous viewers allowed and embedding on, admin login in `infra/stack.env` |
+| **Prometheus** | http://127.0.0.1:9090 | Scrapes the host, GPU, Postgres, Temporal and the Basir server (`:8000/metrics`) |
+| **Postgres** | `127.0.0.1:5433` | Databases `mlflow`, `temporal`, `temporal_visibility` |
+| node-exporter · gpu-exporter · postgres-exporter | `:9101` · `:9835` · `:9187` | Metrics for Prometheus |
+
+Notes:
+
+- **Point Basir at the server** with `MLFLOW_TRACKING_URI=http://127.0.0.1:5000` in `.env`. Without it, runs go to the local SQLite file as before (the tests always use SQLite).
+- **Secrets stay local.** The first `up` copies [`infra/stack.env.example`](infra/stack.env.example) to `infra/stack.env` (git-ignored) with random passwords.
+- **The stack runs on the native Docker Engine** (context `default`), because Docker Desktop's VM can't reach the GPU. Start it with `sudo systemctl start docker`; set `BASIR_DOCKER_CONTEXT` to use another context. The GPU exporter needs the NVIDIA Container Toolkit.
+- **Prometheus, Grafana and node-exporter use the host network**, so they can reach loopback-only services such as the Basir server and report the laptop's real network interfaces.
+- **The `basir` target is DOWN** until the Basir server runs on port 8000. That's expected.
+
+**Dashboards** (folder *Basir*, provisioned from [`infra/grafana/dashboards`](infra/grafana/dashboards/)). Embed one panel with `http://127.0.0.1:3000/d-solo/<uid>/_?panelId=<id>&kiosk&theme=light`.
+
+| Dashboard | uid | Panels (id) |
+|---|---|---|
+| Host resources | `basir-host` | 1 CPU · 2 memory · 3 root disk · 4 data drive (My Passport) · 5 CPU by mode · 6 memory · 7 disk space per mount · 8 disk I/O · 9 network · 10 load |
+| GPU | `basir-gpu` | 1 utilization · 2 memory · 3 temperature · 4 power · 5 utilization over time · 6 memory · 7 temperature · 8 power vs limit · 9 clocks |
+| Postgres | `basir-postgres` | 1 up · 2 connections · 3 `mlflow` size · 4 `temporal` size · 5 connections by database · 6 by state · 7 database size · 8 transactions · 9 rows written · 10 cache hit ratio |
+| Temporal | `basir-temporal` | 1 frontend requests/s · 2 workflows completed (1 h) · 3 failed (1 h) · 4 errors/s · 5 workflow outcomes · 6 activity task calls · 7 workflow calls · 8 frontend latency p95 · 9 activity call latency p95 · 10 persistence latency p95 |
+| Basir server | `basir-server` | 1 up · 2 WebSocket connections · 3 frames/s · 4 dropped % · 5 queue depth · 6 inference p95 · 7 frames · 8 queue depth and connections · 9 inference latency p50/p95/p99 · 10 batch size · 11 HTTP requests |
+
+The Basir server dashboard reads the `basir_*` metrics: `basir_ws_connections`, `basir_frames_received_total`, `basir_frames_dropped_total`, `basir_queue_depth`, `basir_batch_size`, `basir_inference_seconds` (histogram) and `basir_http_requests_total`.
+
+```mermaid
+flowchart LR
+  subgraph host["host network (127.0.0.1)"]
+    prom[Prometheus :9090]
+    graf[Grafana :3000]
+    node[node-exporter :9101]
+    app["Basir server :8000<br/>/metrics"]
+  end
+  subgraph compose["compose network"]
+    pg[(Postgres)]
+    mlf[MLflow :5000]
+    tmp[Temporal :7233]
+    ui[Temporal UI :8233]
+    gpu[gpu-exporter :9835]
+    pge[postgres-exporter :9187]
+  end
+  mlf --> pg
+  tmp --> pg
+  ui --> tmp
+  pge --> pg
+  mlf --> art[("mlartifacts/<br/>on the host")]
+  prom --> node & gpu & pge & tmp & app
+  graf --> prom
+```
+
 ## Observability
 
 | Tool | Answers | Records | Where |
 |---|---|---|---|
-| **MLflow** | "Did this change make Basir better?" | One run per script or evaluation: params, metrics, artifacts, git commit, GPU | Local SQLite (`mlflow.db`), artifacts in `mlartifacts/` |
+| **MLflow** | "Did this change make Basir better?" | One run per script or evaluation: params, metrics, artifacts, git commit, GPU | The stack's MLflow server on Postgres, or local SQLite (`mlflow.db`); artifacts in `mlartifacts/` either way |
 | **Langfuse** | "What happened in this one request?" | One trace per query: each step, LLM / VLM calls, latency and cost | Langfuse Cloud for now; self-hosting later |
+| **Prometheus + Grafana** | "Is the machine keeping up?" | Host, GPU, Postgres, Temporal and Basir server metrics over time | The [local stack](#local-stack) |
 
 Langfuse never receives frames or images. Input/output capture is off by default and has to be turned on per function.
 
@@ -205,7 +272,7 @@ Langfuse never receives frames or images. Input/output capture is off by default
 
 ```bash
 uv run pytest -q             # offline suite (toy dataset, local HTTP server, temporary MLflow store)
-uv run pytest -q -m network  # live checks: every TUM preset URL, Langfuse auth
+uv run pytest -q -m network  # live checks: every TUM preset URL, Langfuse auth, local stack targets
 ```
 
 Code quality:
@@ -247,12 +314,21 @@ Basir/
 │   ├── download_dataset.py         # get a preset / URL / archive ready on disk
 │   ├── check_env.py                # versions, CUDA, paths, Langfuse smoke trace
 │   ├── replay.py                   # real-time RGB-D playback window
-│   └── visualize_pointcloud.py     # the Phase 0 check
+│   ├── visualize_pointcloud.py     # the Phase 0 check
+│   └── stack.sh                    # local stack: up / down / status / logs
+├── infra/                          # configs for docker-compose.yml
+│   ├── stack.env.example           # stack passwords and ports (copied to stack.env, git-ignored)
+│   ├── postgres/                   # creates the mlflow and temporal databases
+│   ├── mlflow/                     # MLflow server image (Postgres driver, migrate on start)
+│   ├── prometheus/prometheus.yml   # scrape targets
+│   └── grafana/                    # datasource + dashboard provisioning, dashboard JSON
 ├── tests/                          # one test file per module + shared fixtures
 ├── logo/                           # logo (scan + chat) and README image, light / dark SVG + PNG
 │   └── src/                        # generators that rebuild them from the Phase 0 scan
 ├── datasets/                       # downloaded sequences (git-ignored)
 ├── outputs/                        # point clouds and images (git-ignored)
+├── mlartifacts/                    # MLflow artifacts (git-ignored)
+├── docker-compose.yml              # the local stack
 └── pyproject.toml                  # dependencies (uv)
 ```
 
