@@ -14,6 +14,7 @@ _Last updated: 2026-11-10._ ✅ built on [`phase_0`](https://github.com/omarTBak
 |---|---|---|
 | Core data model and geometry | [core_types](4_class_diagrams/core_types.png) | ✅ `Frame`, `Pose`, `CameraIntrinsics`, geometry; `Observation` / `ObjectTrack` / `QueryResult` ⏳ |
 | Frame sources and datasets | [ingest_and_spatial](4_class_diagrams/ingest_and_spatial.png) | ✅ `FrameSource`, `TUMDatasetSource`, dataset prep; `ARCoreStreamSource` / `RecordingSource` ⏳ |
+| Data versioning | — | 🔄 DVC done on `dvc_setup` (awaiting review): one `.dvc` per TUM sequence, local remote `dvc-remotes/Basir` |
 | Replay and evaluation | [replay_eval](3_sequence_diagrams/replay_eval.png), [evaluation](2_use_case_diagrams/evaluation.png) | ✅ replay, point-cloud check with MLflow; 🔄 Temporal pipeline DAG (`pipeline_dag`) |
 | Multi-phone streaming | [phone_stream](3_sequence_diagrams/phone_stream.png), [phone_app](2_use_case_diagrams/phone_app.png) | 🔄 server-side ingest + GPU micro-batching (`server_ui`); phone app ⏳ |
 | Server, UI and observability | system overviews | 🔄 FastAPI UI, Prometheus, Grafana (`server_ui`, `infra_stack`) |
