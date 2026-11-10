@@ -1,6 +1,6 @@
-"""TUM RGB-D file formats: timestamped text files and per-sequence calibration.
+"""TUM RGB-D file formats: timestamped text files and per-sensor calibration.
 
-Standard library only, so lightweight tools (the dataset downloader) can use it.
+Standard library only, so lightweight tools can use it.
 """
 
 from __future__ import annotations
@@ -35,6 +35,11 @@ def parse_tum_file(path: Path) -> dict[float, str]:
             except ValueError:
                 continue
     return data
+
+
+def write_tum_file(path: Path, header: str, lines: list[str]) -> None:
+    """Write a TUM timestamped text file: one comment header line, then the rows."""
+    Path(path).write_text("\n".join([header, *lines]) + "\n", encoding="utf-8")
 
 
 def calibration_for(dataset_dir: Path) -> tuple[dict[str, float] | None, str]:

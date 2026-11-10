@@ -2,13 +2,12 @@
 
 from __future__ import annotations
 
-import os
 import socket
 
 import pytest
 
 import utilities.tracing as tracing
-from utilities.tracing import flush, get_tracer, observe, trace_context
+from utilities.tracing import flush, get_tracer, observe
 
 
 @pytest.fixture(autouse=True)
@@ -19,7 +18,7 @@ def reset_tracer(clean_env: pytest.MonkeyPatch):
 
 
 def test_without_keys_everything_is_a_noop(monkeypatch: pytest.MonkeyPatch) -> None:
-    def no_network(*args, **kwargs):
+    def no_network(*_args, **_kwargs):
         raise AssertionError("tracing must not touch the network without keys")
 
     monkeypatch.setattr(socket, "create_connection", no_network)
@@ -29,8 +28,7 @@ def test_without_keys_everything_is_a_noop(monkeypatch: pytest.MonkeyPatch) -> N
 
     traced = observe(name="add")(add)
     assert traced is add  # literally the same function
-    with trace_context(query="where is my mug?"):
-        assert traced(2, 3) == 5
+    assert traced(2, 3) == 5
     flush()
     assert get_tracer() is None
 
@@ -48,17 +46,18 @@ def test_with_keys_functions_are_wrapped(reset_tracer: pytest.MonkeyPatch) -> No
 
     traced = observe(name="add")(add)
     assert traced is not add
-    with trace_context(query="test"):
-        assert traced(2, 3) == 5
+    assert traced(2, 3) == 5
 
 
-def test_tracer_start_failure_disables_tracing(reset_tracer: pytest.MonkeyPatch, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_tracer_start_failure_disables_tracing(
+    reset_tracer: pytest.MonkeyPatch, monkeypatch: pytest.MonkeyPatch
+) -> None:
     reset_tracer.setenv("BASIR_LANGFUSE_PUBLIC_KEY", "pk")
     reset_tracer.setenv("BASIR_LANGFUSE_SECRET_KEY", "sk")
 
     import langfuse
 
-    def broken(*args, **kwargs):
+    def broken(*_args, **_kwargs):
         raise RuntimeError("cannot start")
 
     monkeypatch.setattr(langfuse, "Langfuse", broken)
@@ -75,4 +74,3 @@ def test_live_langfuse_auth() -> None:
         pytest.skip("no Langfuse keys configured")
     tracing.get_tracer.cache_clear()
     assert get_tracer().auth_check()
-    assert os.environ is not None

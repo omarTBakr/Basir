@@ -67,6 +67,7 @@ def is_within_directory(path: str | Path, base: str | Path) -> bool:
 # 2. Hashing
 # ---------------------------------------------------------------------------
 
+
 def file_digest(path: str | Path, algorithm: str = "sha256") -> str:
     """Hex digest of a file, read in chunks."""
     hasher = hashlib.new(algorithm)
@@ -165,7 +166,6 @@ def download_file(
     checksum_type: str = "sha256",
     resume: bool = True,
     quiet: bool = False,
-    chunk_size: int = 1 << 16,
 ) -> Path:
     """Download `url` to `target_file`, resuming a previous `.part` file if present.
 
@@ -201,16 +201,19 @@ def download_file(
         resumed = response.getcode() == 206 and offset > 0
         length = int(response.headers.get("Content-Length") or 0)
         total = length + offset if resumed else length
-        with tqdm(
-            total=total or None,
-            initial=offset if resumed else 0,
-            unit="B",
-            unit_scale=True,
-            unit_divisor=1024,
-            desc=target_file.name,
-            disable=quiet,
-        ) as progress, open(part_file, "ab" if resumed else "wb") as f:
-            while chunk := response.read(chunk_size):
+        with (
+            tqdm(
+                total=total or None,
+                initial=offset if resumed else 0,
+                unit="B",
+                unit_scale=True,
+                unit_divisor=1024,
+                desc=target_file.name,
+                disable=quiet,
+            ) as progress,
+            open(part_file, "ab" if resumed else "wb") as f,
+        ):
+            while chunk := response.read(1 << 16):
                 f.write(chunk)
                 progress.update(len(chunk))
 
@@ -241,6 +244,7 @@ def _finish_download(
 # ---------------------------------------------------------------------------
 # 5. PNG writing (no imaging library needed)
 # ---------------------------------------------------------------------------
+
 
 def write_png_rgb(path: str | Path, width: int, height: int, color: tuple[int, int, int]) -> None:
     """Write a solid-colour 8-bit RGB PNG."""
@@ -295,14 +299,9 @@ def parse_env_file(path: str | Path) -> dict[str, str]:
         key, raw = (part.strip() for part in line.split("=", 1))
 
         quote = raw[:1] if raw[:1] in ("'", '"') and raw[:1] in raw[1:] else ""
-        if quote:
-            value = raw[1 : raw.index(quote, 1)]
-        else:
-            value = raw.split(" #", 1)[0].strip()
+        value = raw[1 : raw.index(quote, 1)] if quote else raw.split(" #", 1)[0].strip()
 
         if quote != "'":
-            value = _VAR_PATTERN.sub(
-                lambda m: values.get(m[1] or m[2], os.getenv(m[1] or m[2], "")), value
-            )
+            value = _VAR_PATTERN.sub(lambda m: values.get(m[1] or m[2], os.getenv(m[1] or m[2], "")), value)
         values[key] = value
     return values

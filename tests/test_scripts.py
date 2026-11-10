@@ -7,8 +7,8 @@ from pathlib import Path
 import numpy as np
 import pytest
 
+from basir.ingest.datasets.toy import create_toy_dataset
 from scripts import replay, visualize_pointcloud
-from scripts.download_dataset import create_toy_dataset, dataset_dir
 
 
 @pytest.fixture
@@ -23,14 +23,6 @@ def _runs(tmp_path: Path, experiment: str) -> list:
     client = MlflowClient(tracking_uri=f"sqlite:///{tmp_path / 'mlflow.db'}")
     exp = client.get_experiment_by_name(experiment)
     return client.search_runs([exp.experiment_id]) if exp else []
-
-
-def test_dataset_dir_resolution(toy: Path, tmp_path: Path) -> None:
-    assert dataset_dir(str(toy)) == toy.resolve()
-    with pytest.raises(FileNotFoundError, match="not downloaded yet"):
-        dataset_dir("fr1/desk")
-    with pytest.raises(FileNotFoundError, match="neither a folder"):
-        dataset_dir("no_such_thing")
 
 
 def test_replay_headless(toy: Path, tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
@@ -55,14 +47,16 @@ def test_replay_missing_dataset_fails_cleanly(tmp_path: Path, clean_env: pytest.
 def test_render_shapes(toy: Path) -> None:
     from basir.ingest.sources.tum import TUMDatasetSource
 
-    canvas = replay.render(TUMDatasetSource(toy)[0])
+    canvas = replay.render(next(iter(TUMDatasetSource(toy))))
     assert canvas.shape == (48, 128, 3)
 
 
 def test_visualize_pointcloud_headless(toy: Path, tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     import open3d as o3d
 
-    assert visualize_pointcloud.main([str(toy), "--every", "1", "--pixel-stride", "1", "--voxel", "0", "--no-window"]) == 0
+    assert (
+        visualize_pointcloud.main([str(toy), "--every", "1", "--pixel-stride", "1", "--voxel", "0", "--no-window"]) == 0
+    )
     out = capsys.readouterr().out
     assert "6 frames" in out and "Depth consistency" in out
 
@@ -80,6 +74,8 @@ def test_visualize_pointcloud_headless(toy: Path, tmp_path: Path, capsys: pytest
     assert run.data.params["intrinsics_source"] == "intrinsics.json"
     assert run.data.metrics["frames_used"] == 6
     assert {"toy.ply", "toy.topdown.png", "toy.trajectory.csv"} <= {
-        a.path for a in __import__("mlflow").tracking.MlflowClient(
-            tracking_uri=f"sqlite:///{tmp_path / 'mlflow.db'}").list_artifacts(run.info.run_id)
+        a.path
+        for a in __import__("mlflow")
+        .tracking.MlflowClient(tracking_uri=f"sqlite:///{tmp_path / 'mlflow.db'}")
+        .list_artifacts(run.info.run_id)
     }

@@ -48,8 +48,15 @@ def test_is_url(text: str, expected: bool) -> None:
 
 @pytest.mark.parametrize(
     "name, expected",
-    [("a.tar.gz", True), ("a.tgz", True), ("a.zip", True), ("a.tar.bz2", True), ("A.TAR.XZ", True),
-     ("a.txt", False), ("a.png", False)],
+    [
+        ("a.tar.gz", True),
+        ("a.tgz", True),
+        ("a.zip", True),
+        ("a.tar.bz2", True),
+        ("A.TAR.XZ", True),
+        ("a.txt", False),
+        ("a.png", False),
+    ],
 )
 def test_is_archive(name: str, expected: bool) -> None:
     assert is_archive(name) is expected

@@ -25,13 +25,13 @@
 
 > **Basir** (بصير, "the one who sees): a camera that remembers where it saw your things and walks you back to them.
 
-**▶ [See the end-to-end flow](software_engineering/3_sequence_diagrams/system_overview.png)** (remember → ask → directions → found it) · [Jump to the Phase 0 check](#phase-0-check)
+**▶ [See the end-to-end flow](https://github.com/omarTBakr/Basir/blob/software_engineering/software_engineering/3_sequence_diagrams/system_overview.png)** (remember → ask → directions → found it) · [Jump to the Phase 0 check](#phase-0-check)
 
 Basir watches a moving camera and builds a **spatial memory** of the objects it sees. Ask *"Where is my water bottle?"* and it finds the bottle in memory, even if it was seen minutes ago and is nowhere in view now. It answers with directions from where you stand ("turn right ~120°, go about 2.3 m, it's on the desk, last seen 45 s ago"), updates them as you move, and outlines the object on screen once it's back in view.
 
 The deployment is a **phone + laptop** split. An Android phone running **ARCore** (realme 14 / 15) records video, its own 6-DoF pose and depth, and shows the answers. The laptop (RTX 4060, 8 GB) is the server that runs the models. No model is trained from scratch: detection, segmentation, embeddings and depth all come from pretrained models (Grounding DINO / YOLO-World, SAM 2/3, SigLIP 2, Depth Anything). The new work is the memory, the 3D fusion and the guidance.
 
-The stage built today is **Phase 0, the foundation**: replay a recorded RGB-D scene, turn depth and camera poses into a correct 3D point cloud, and *measure* that it's correct. Every direction Basir gives later depends on this geometry. The later phases are fully designed but not built yet. The phases are summarised in the [Roadmap](#roadmap), and the UML (user stories, use cases, sequence and class diagrams) is in [`software_engineering/`](software_engineering/README.md).
+The stage built today is **Phase 0, the foundation**: replay a recorded RGB-D scene, turn depth and camera poses into a correct 3D point cloud, and *measure* that it's correct. Every direction Basir gives later depends on this geometry. The later phases are fully designed but not built yet. The phases are summarised in the [Roadmap](#roadmap), and the UML (user stories, use cases, sequence and class diagrams) is in [`software_engineering` branch](https://github.com/omarTBakr/Basir/blob/software_engineering/software_engineering/README.md).
 
 - [Phase 0 check](#phase-0-check)
 - [Quickstart](#quickstart)
@@ -52,8 +52,8 @@ One `visualize_pointcloud.py` run does the following, as defined in [`scripts/vi
 
 1. **Load.** [`TUMDatasetSource`](basir/ingest/sources/tum.py) reads every Nth frame: RGB, depth in metres and the pose `T_world_cam`. The camera intrinsics come from the dataset's own calibration (freiburg1 / 2 / 3), not a generic default.
 2. **Lift to 3D.** [`frame_to_world_points`](basir/core/geometry.py) back-projects each depth pixel and moves it into the world frame with the frame's pose.
-3. **Fuse.** All frames are merged into one coloured cloud and voxel-downsampled with Open3D.
-4. **Score.** [`depth_consistency`](basir/core/geometry.py) projects each frame's surfaces into the next frame and compares them against that frame's own depth. Correct geometry leaves only sensor noise of a few cm; a pose or axis bug shows up as tens of cm, before you even look at the cloud.
+3. **Fuse.** [`build_cloud`](basir/spatial/pointcloud.py) merges all frames into one coloured cloud, voxel-downsampled with Open3D.
+4. **Score.** [`depth_consistency`](basir/core/geometry.py), averaged over frame pairs by [`average_consistency`](basir/spatial/pointcloud.py), projects each frame's surfaces into the next frame and compares them against that frame's own depth. Correct geometry leaves only sensor noise of a few cm; a pose or axis bug shows up as tens of cm, before you even look at the cloud.
 5. **Save and log.** It writes `outputs/<dataset>.ply`, a top-down image and the camera trajectory, and logs params, metrics and those files to **MLflow**.
 
 ```mermaid
@@ -101,22 +101,17 @@ Notes:
 
 ## Configuration
 
-**Environment (`.env`):** every key is defined in [`utilities/config.py`](utilities/config.py). Real environment variables override the file, and `BASIR_<NAME>` overrides `<NAME>`, so generic names like `DEBUG` can be pinned.
+**Environment (`.env`):** every key is defined in [`utilities/config.py`](utilities/config.py). Real environment variables override the file, and `BASIR_<NAME>` overrides `<NAME>`, so generic names like `DEVICE` can be pinned. Only what the built phases use is configurable; each later phase adds its own settings.
 
 | Setting | Does what |
 |---|---|
-| `APP_NAME`, `APP_ENV`, `DEBUG`, `LOG_LEVEL` | Application identity and logging (`APP_ENV`: development, staging, production) |
+| `APP_ENV` | `development`, `staging` or `production`; also tags Langfuse traces |
 | `DEVICE` | `auto`, `cuda`, `cpu` or `mps`; `auto` picks CUDA when available |
-| `DATA_DIR` | Root for datasets, outputs, the MLflow store, weights and logs (default: the project folder) |
-| `API_HOST`, `API_PORT`, `WS_PATH` | FastAPI server and the phone's WebSocket path (from Phase 6) |
-| `GRADIO_HOST`, `GRADIO_PORT` | Demo UI (from Phase 1) |
-| `QDRANT_URL`, `QDRANT_API_KEY`, `QDRANT_COLLECTION_*` | Vector database for the memory (from Phase 1) |
-| `DETECTOR_MODEL`, `SEGMENTER_MODEL`, `EMBEDDER_MODEL`, `DINO_MODEL`, `DEPTH_MODEL`, `VLM_MODEL` | Hugging Face model IDs for each perception step |
-| `GEMINI_API_KEY`, `OPENAI_API_KEY` | Optional hosted LLM / VLM providers |
+| `DATA_DIR` | Root for `datasets/`, `outputs/`, `mlflow.db` and `mlartifacts/` (default: the project folder) |
 | `MLFLOW_TRACKING_URI` | Where runs are recorded (default: `sqlite:///<DATA_DIR>/mlflow.db`) |
 | `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY`, `LANGFUSE_BASE_URL` | Runtime tracing; off until both keys are set (default URL: Langfuse Cloud) |
 
-**Design constants** (keyframe thresholds, fusion gates, ranking weights, the household-noun list and the default camera) are read-only properties on `Settings`, with each value traced to the design plan. They move to `configs/default.yaml` in Phase 1, when they start needing tuning.
+The default camera (TUM / Kinect v1 intrinsics) is a read-only property on `Settings`, used when a dataset has no calibration of its own.
 
 ## Features
 
@@ -127,15 +122,15 @@ Notes:
 **Data in, the same way every time**
 - [`TUMDatasetSource`](basir/ingest/sources/tum.py) yields `Frame`s: RGB, depth in metres, intrinsics and pose. It implements the `FrameSource` interface that the phone stream will also implement, so later phases don't care where frames come from.
 - Intrinsics are chosen per dataset: the dataset's own `intrinsics.json`, then the TUM calibration for its sensor, then the default.
-- [`download_dataset.py`](scripts/download_dataset.py) has 18 TUM presets. It handles URLs and local archives, resumes interrupted downloads, extracts safely (no `../` escapes), pairs RGB with depth and ground truth, and writes a `dataset_meta.json` for each dataset.
+- [`basir/ingest/datasets`](basir/ingest/datasets/__init__.py) has 18 TUM presets. It handles URLs and local archives, resumes interrupted downloads, extracts safely (no `../` escapes), pairs RGB with depth and ground truth, and writes a `dataset_meta.json` for each dataset.
 
 **Every run leaves a record**
 - **MLflow** keeps every replay and point-cloud run with its params, metrics and files, tagged with the git commit, GPU and Basir version. You can compare two settings side by side, or before and after a change.
 - **Langfuse** tracing is wired in and stays off until keys are set, so nothing leaves the machine by default. Its first real traces come in Phase 1.
 
 **Built to grow**
-- One responsibility per module: `utilities/` holds settings, tracking, tracing, middleware and generic helpers, and `basir/` holds the domain code.
-- The design comes first: [`software_engineering/`](software_engineering/README.md) has 6 epics of user stories and 6 each of use case, sequence and class diagrams, kept in step with the code.
+- One responsibility per module: `utilities/` holds settings, run tracking, tracing and generic helpers, and `basir/` holds the domain code.
+- The design comes first: [`software_engineering` branch](https://github.com/omarTBakr/Basir/blob/software_engineering/software_engineering/README.md) has 6 epics of user stories and 6 each of use case, sequence and class diagrams, kept in step with the code.
 
 ## Roadmap
 
@@ -157,44 +152,52 @@ The phone choice is behind phases 3+: it needs ARCore with the **Depth API** (re
 
 ```mermaid
 flowchart TB
-  subgraph entry["Entry points"]
-    scripts["scripts/<br/>download_dataset · check_env · replay · visualize_pointcloud"]
+  subgraph entry["scripts/ (command line only)"]
+    scripts["download_dataset · check_env · replay · visualize_pointcloud"]
   end
   subgraph domain["basir/"]
-    core["core/<br/>types (Frame, Pose, CameraIntrinsics) · geometry"]
-    ingest["ingest/sources/<br/>FrameSource · TUMDatasetSource · tum_format"]
+    core["core/<br/>types · geometry"]
+    datasets["ingest/datasets/<br/>presets · layout · toy · prepare · tum_format"]
+    sources["ingest/sources/<br/>FrameSource · TUMDatasetSource"]
+    playback["ingest/playback<br/>Pacer · PlaybackStats"]
+    spatial["spatial/pointcloud<br/>build · score · top view"]
   end
   subgraph shared["utilities/"]
     config["config<br/>Settings"]
     exp["experiment<br/>MLflow"]
     trace["tracing<br/>Langfuse"]
-    mw["middleware<br/>request ID + timing"]
     util["utility<br/>downloads · archives · PNG · .env"]
   end
-  scripts --> ingest
-  scripts --> core
+  scripts --> datasets
+  scripts --> sources
+  scripts --> playback
+  scripts --> spatial
   scripts --> exp
-  scripts --> util
-  ingest --> core
-  ingest --> config
+  datasets --> util
+  datasets --> config
+  sources --> datasets
+  sources --> core
+  playback --> core
+  spatial --> core
   exp --> config
   trace --> config
-  trace --> mw
   config --> util
 ```
 
+- **Scripts are thin.** Each one parses arguments, calls `basir/`, and logs to MLflow. No script imports another script, so everything reusable lives in the library.
+- **One job per module.** Dataset preparation is split into the catalogue (`presets`), the index files (`layout`), the synthetic test data (`toy`) and the download pipeline (`prepare`). Playback pacing is separate from any display, and map building (`spatial/pointcloud`) is separate from the viewer.
 - **Frame sources are interchangeable.** Anything that yields `Frame`s satisfies [`FrameSource`](basir/ingest/sources/base.py): the TUM dataset today, phone recordings and the live ARCore stream later.
 - **Geometry has no I/O.** [`basir/core`](basir/core/) depends on numpy only, so it's fast to test and safe to reuse in every phase.
 - **Scripts never import MLflow or Langfuse directly.** They go through [`utilities/experiment.py`](utilities/experiment.py) and [`utilities/tracing.py`](utilities/tracing.py). Logging failures produce one warning and never stop a run.
 
-Full detail: [class diagrams](software_engineering/4_class_diagrams/) (start with [system_overview](software_engineering/4_class_diagrams/system_overview.png)) and [sequence diagrams](software_engineering/3_sequence_diagrams/).
+Full detail: [class diagrams](https://github.com/omarTBakr/Basir/tree/software_engineering/software_engineering/4_class_diagrams/) (start with [system_overview](https://github.com/omarTBakr/Basir/blob/software_engineering/software_engineering/4_class_diagrams/system_overview.png)) and [sequence diagrams](https://github.com/omarTBakr/Basir/tree/software_engineering/software_engineering/3_sequence_diagrams/).
 
 ## Observability
 
 | Tool | Answers | Records | Where |
 |---|---|---|---|
 | **MLflow** | "Did this change make Basir better?" | One run per script or evaluation: params, metrics, artifacts, git commit, GPU | Local SQLite (`mlflow.db`), artifacts in `mlartifacts/` |
-| **Langfuse** | "What happened in this one request?" | One trace per query: each step, LLM / VLM calls, latency, cost, linked to the middleware's `X-Request-ID` | Langfuse Cloud for now; self-hosting later |
+| **Langfuse** | "What happened in this one request?" | One trace per query: each step, LLM / VLM calls, latency and cost | Langfuse Cloud for now; self-hosting later |
 
 Langfuse never receives frames or images. Input/output capture is off by default and has to be turned on per function.
 
@@ -203,6 +206,13 @@ Langfuse never receives frames or images. Input/output capture is off by default
 ```bash
 uv run pytest -q             # offline suite (toy dataset, local HTTP server, temporary MLflow store)
 uv run pytest -q -m network  # live checks: every TUM preset URL, Langfuse auth
+```
+
+Code quality:
+
+```bash
+uv run ruff check .          # lint (pyflakes, bugbear, pyupgrade, simplify, isort, ...)
+uv run ruff format --check . # formatting
 ```
 
 There's one test file per module. The geometry tests are mandatory: every later phase depends on them.
@@ -215,29 +225,38 @@ Basir/
 │   ├── core/
 │   │   ├── types.py                # Frame, Pose, CameraIntrinsics
 │   │   └── geometry.py             # rotations, transforms, projection, depth → points, consistency
-│   └── ingest/sources/
-│       ├── base.py                 # FrameSource interface
-│       ├── tum.py                  # TUMDatasetSource
-│       └── tum_format.py           # TUM file formats + per-sensor calibration (stdlib only)
+│   ├── ingest/
+│   │   ├── datasets/
+│   │   │   ├── presets.py          # the TUM RGB-D catalogue and name resolution
+│   │   │   ├── layout.py           # associations.txt and dataset_meta.json
+│   │   │   ├── toy.py              # synthetic dataset with known geometry (tests)
+│   │   │   ├── prepare.py          # resolve, download, extract, index a dataset
+│   │   │   └── tum_format.py       # TUM file formats + per-sensor calibration (stdlib only)
+│   │   ├── sources/
+│   │   │   ├── base.py             # FrameSource interface
+│   │   │   └── tum.py              # TUMDatasetSource
+│   │   └── playback.py             # real-time pacing and playback statistics
+│   └── spatial/
+│       └── pointcloud.py           # fused cloud, consistency score, top-down image
 ├── utilities/
-│   ├── config.py                   # Settings (.env + environment) and design constants
+│   ├── config.py                   # Settings (.env + environment)
 │   ├── experiment.py               # MLflow run tracking
 │   ├── tracing.py                  # Langfuse tracing (no-op without keys)
-│   ├── middleware.py               # request ID + timing for FastAPI (HTTP + WebSocket)
 │   └── utility.py                  # URLs, hashing, archives, downloads, PNG, .env parsing
-├── scripts/
-│   ├── download_dataset.py         # TUM presets, download / resume / extract / associate, toy data
+├── scripts/                        # command line only
+│   ├── download_dataset.py         # get a preset / URL / archive ready on disk
 │   ├── check_env.py                # versions, CUDA, paths, Langfuse smoke trace
-│   ├── replay.py                   # real-time RGB-D playback
+│   ├── replay.py                   # real-time RGB-D playback window
 │   └── visualize_pointcloud.py     # the Phase 0 check
 ├── tests/                          # one test file per module + shared fixtures
-├── software_engineering/           # user stories, use cases, sequence + class diagrams (PlantUML)
 ├── logo/                           # logo (scan + chat) and README image, light / dark SVG + PNG
 │   └── src/                        # generators that rebuild them from the Phase 0 scan
 ├── datasets/                       # downloaded sequences (git-ignored)
 ├── outputs/                        # point clouds and images (git-ignored)
 └── pyproject.toml                  # dependencies (uv)
 ```
+
+The UML (user stories, use cases, sequence and class diagrams) lives on the separate [`software_engineering` branch](https://github.com/omarTBakr/Basir/tree/software_engineering/software_engineering).
 
 ## License
 

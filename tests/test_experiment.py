@@ -52,18 +52,16 @@ def test_broken_tracking_uri_warns_but_does_not_raise(
 ) -> None:
     clean_env.setenv("BASIR_MLFLOW_TRACKING_URI", "unsupported-scheme://nowhere")
     clean_env.setattr(experiment, "_warned", False)
-    with caplog.at_level(logging.WARNING, logger="basir.experiment"):
-        with start_run("test-exp") as run_id:
-            assert run_id is None
-            log_params({"a": 1})
-            log_metrics({"b": 2})
+    with caplog.at_level(logging.WARNING, logger="basir.experiment"), start_run("test-exp") as run_id:
+        assert run_id is None
+        log_params({"a": 1})
+        log_metrics({"b": 2})
     assert sum("MLflow" in r.getMessage() for r in caplog.records) == 1
 
 
 def test_exceptions_inside_the_run_propagate_and_close_the_run(mlflow_store: str) -> None:
     import mlflow
 
-    with pytest.raises(RuntimeError):
-        with start_run("test-exp"):
-            raise RuntimeError("boom")
+    with pytest.raises(RuntimeError), start_run("test-exp"):
+        raise RuntimeError("boom")
     assert mlflow.active_run() is None

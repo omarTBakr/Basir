@@ -7,10 +7,10 @@ from pathlib import Path
 import numpy as np
 import pytest
 
+from basir.ingest.datasets.toy import create_toy_dataset
+from basir.ingest.datasets.tum_format import TUM_CALIBRATION, calibration_for, parse_tum_file
 from basir.ingest.sources.base import FrameSource
 from basir.ingest.sources.tum import TUMDatasetSource
-from basir.ingest.sources.tum_format import TUM_CALIBRATION, calibration_for, parse_tum_file
-from scripts.download_dataset import create_toy_dataset
 
 
 @pytest.fixture
@@ -40,7 +40,7 @@ def test_frames_depth_rgb_and_poses(toy: Path) -> None:
 def test_stride_and_max_frames(toy: Path) -> None:
     assert len(TUMDatasetSource(toy, stride=2)) == 3
     assert len(TUMDatasetSource(toy, max_frames=4)) == 4
-    assert np.isclose(TUMDatasetSource(toy, stride=2)[1].depth[0, 0], 1.6)
+    assert np.isclose(list(TUMDatasetSource(toy, stride=2))[1].depth[0, 0], 1.6)
     with pytest.raises(ValueError):
         TUMDatasetSource(toy, stride=0)
 
@@ -87,9 +87,10 @@ def test_missing_folder_and_unreadable_image(tmp_path: Path, toy: Path) -> None:
         list(TUMDatasetSource(toy))
 
 
-def test_context_manager(toy: Path) -> None:
-    with TUMDatasetSource(toy, max_frames=1) as source:
-        assert len(list(source)) == 1
+def test_close_is_safe(toy: Path) -> None:
+    source = TUMDatasetSource(toy, max_frames=1)
+    assert len(list(source)) == 1
+    source.close()
 
 
 def test_parse_tum_file(tmp_path: Path) -> None:

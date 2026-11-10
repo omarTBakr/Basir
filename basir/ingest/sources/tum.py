@@ -14,7 +14,7 @@ import cv2
 import numpy as np
 
 from basir.core.types import CameraIntrinsics, Frame, Pose
-from basir.ingest.sources.tum_format import TUM_DEPTH_FACTOR, calibration_for
+from basir.ingest.datasets.tum_format import TUM_DEPTH_FACTOR, calibration_for
 from utilities.config import get_settings
 
 
@@ -64,17 +64,8 @@ class TUMDatasetSource:
         for index, entry in enumerate(self._entries):
             yield self._load(index, entry)
 
-    def __getitem__(self, index: int) -> Frame:
-        return self._load(index, self._entries[index])
-
     def close(self) -> None:  # nothing held open; present for the FrameSource interface
         pass
-
-    def __enter__(self) -> TUMDatasetSource:
-        return self
-
-    def __exit__(self, *exc: object) -> None:
-        self.close()
 
     def _load(self, index: int, entry: _Entry) -> Frame:
         bgr = cv2.imread(str(self.root / entry.rgb_path), cv2.IMREAD_COLOR)

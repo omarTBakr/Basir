@@ -8,26 +8,21 @@ license-files = ["LICENSE"]
 classifiers = ["Private :: Do Not Upload"]
 requires-python = ">=3.12"
 dependencies = [
-    "fastapi>=0.162.2",
     "langfuse>=5.2.0",
     "mlflow>=3.18.0",
     "numpy>=2.5.4",
     "open3d>=0.20.0",
     "opencv-python>=5.0.0.93",
     "pydantic>=2.14.3",
-    "pytest>=9.2.0",
-    "pyyaml>=6.0.3",
-    "scipy>=1.18.1",
     "torch>=2.15.0",
-    "torchvision>=0.29.2",
     "tqdm>=4.70.1",
-    "uvicorn[standard]>=0.54.0",
 ]
 
 [dependency-groups]
 dev = [
-    "httpx2>=2.16.0",
     "pytest>=9.2.0",
+    "ruff==0.15.4",
+    "scipy>=1.18.1",
 ]
 
 [tool.pytest.ini_options]
@@ -39,3 +34,13 @@ filterwarnings = [
     # raised inside MLflow's own SQLAlchemy store, not Basir code
     "ignore:The ``noload`` loader strategy is deprecated:DeprecationWarning",
 ]
+
+[tool.ruff]
+line-length = 120
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "SIM", "RUF"]
+
+[tool.ruff.lint.isort]
+force-sort-within-sections = true

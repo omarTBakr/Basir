@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Check that this machine can run Basir: Python, GPU, key libraries and observability.
 
-    python scripts/check_env.py              # versions + CUDA check (exit 1 without CUDA)
-    python scripts/check_env.py --langfuse   # also send one smoke trace to Langfuse
+python scripts/check_env.py              # versions + CUDA check (exit 1 without CUDA)
+python scripts/check_env.py --langfuse   # also send one smoke trace to Langfuse
 """
 
 from __future__ import annotations
@@ -15,9 +15,9 @@ import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from utilities.config import get_settings  # noqa: E402
+from utilities.config import get_settings
 
-PACKAGES = ["torch", "torchvision", "numpy", "scipy", "opencv-python", "open3d", "mlflow", "langfuse", "fastapi"]
+PACKAGES = ["torch", "numpy", "opencv-python", "open3d", "pydantic", "tqdm", "mlflow", "langfuse"]
 
 
 def report_versions() -> None:

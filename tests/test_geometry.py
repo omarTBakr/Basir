@@ -117,7 +117,7 @@ def test_axis_directions() -> None:
 
 
 def test_points_behind_camera_are_not_visible() -> None:
-    u, v, z = project(np.array([[0.0, 0.0, -1.0], [0.0, 0.0, 0.0], [0.0, 0.0, 1.0]]), K)
+    u, v, _ = project(np.array([[0.0, 0.0, -1.0], [0.0, 0.0, 0.0], [0.0, 0.0, 1.0]]), K)
     assert np.isnan(u[:2]).all() and np.isnan(v[:2]).all()
     assert np.isclose(u[2], INTR.cx)
 
@@ -131,7 +131,7 @@ def test_depth_to_points_flat_plane_and_invalid_pixels() -> None:
     depth = np.full((48, 64), 2.0, dtype=np.float32)
     depth[0, :] = 0.0  # no reading
     depth[1, :] = 20.0  # beyond max_depth
-    points, rows, cols = depth_to_points(depth, K)
+    points, rows, _ = depth_to_points(depth, K)
     assert len(points) == 46 * 64
     assert np.allclose(points[:, 2], 2.0)
     assert rows.min() == 2
@@ -139,7 +139,7 @@ def test_depth_to_points_flat_plane_and_invalid_pixels() -> None:
 
 def test_depth_to_points_stride() -> None:
     depth = np.full((48, 64), 1.0, dtype=np.float32)
-    points, rows, cols = depth_to_points(depth, K, stride=4)
+    points, rows, _ = depth_to_points(depth, K, stride=4)
     assert len(points) == 12 * 16
     assert set(np.unique(rows)) == set(range(0, 48, 4))
 
@@ -216,7 +216,7 @@ def test_depth_consistency_detects_a_wrong_pose() -> None:
 def test_pose_from_tum() -> None:
     pose = Pose.from_tum(1.5, 1, 2, 3, 0, 0, 0, 1)
     assert pose.timestamp == 1.5
-    assert np.allclose(pose.position, [1, 2, 3]) and np.allclose(pose.rotation, np.eye(3))
+    assert np.allclose(pose.position, [1, 2, 3]) and np.allclose(pose.matrix[:3, :3], np.eye(3))
     assert np.allclose(pose.inverse() @ pose.matrix, np.eye(4))
 
 
@@ -233,10 +233,10 @@ def test_intrinsics_scaled_keeps_centre() -> None:
 
 
 def test_toy_dataset_points_are_at_toy_depth(tmp_path: Path) -> None:
+    from basir.ingest.datasets.toy import create_toy_dataset
     from basir.ingest.sources.tum import TUMDatasetSource
-    from scripts.download_dataset import create_toy_dataset
 
-    frame = TUMDatasetSource(create_toy_dataset(tmp_path / "toy", num_frames=2))[0]
+    frame = next(iter(TUMDatasetSource(create_toy_dataset(tmp_path / "toy", num_frames=2))))
     points_cam, _, _ = depth_to_points(frame.depth, frame.intrinsics.K)
     assert len(points_cam) == 64 * 48
     assert np.allclose(points_cam[:, 2], 1.5)

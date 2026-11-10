@@ -1,17 +1,13 @@
-# Logo generators
+# Logo build
 
-These scripts build Basir's marks from the room it reconstructed in Phase 0 (`outputs/rgbd_dataset_freiburg1_room.ply`, created by `scripts/visualize_pointcloud.py fr1/room`).
+[`build_logo.py`](build_logo.py) builds Basir's two marks from the room it reconstructed in Phase 0:
 
-| Script | Does what |
-|---|---|
-| `export.py` | Writes the chosen marks to `logo/`: the logo (scan + chat) and the README image (scan on a phone), as light / dark SVG and PNG |
-| `generate4.py` | The four scan + chat compositions (conversation, eye badge, phone chat, answer chip) as a design board |
-| `generate3.py` | The three 3D treatments of the scan (voxel blocks, corner perspective, exploded layers) |
-| `generate.py` | The modelled room and apartment concepts, and the shared speech bubble |
+- **Logo** (`logo/basir-logo-*`): the scanned room as isometric voxels, a two-bubble chat (your question, Basir's answer with the direction) and a pin on the found object.
+- **README image** (`logo/basir-readme-*`): the same scan on a phone screen, with the conversation beside it.
 
 ```bash
 uv run python scripts/visualize_pointcloud.py fr1/room --no-window   # once, to create the scan
-cd logo/src && uv run python export.py ../..                          # rebuild logo/*.svg and *.png
+uv run python logo/src/build_logo.py                                  # rebuild logo/*.svg and *.png
 ```
 
-`export.py` rasterises the PNGs with headless Google Chrome. The design-board scripts write `index.html` next to themselves (git-ignored).
+Each mark is written as light and dark SVG (colours baked in, the scan embedded) plus PNG sizes, rasterised with headless Google Chrome. `--no-png` writes the SVGs only, and `--out DIR` writes somewhere else.

@@ -19,7 +19,7 @@ def clean_env(monkeypatch: pytest.MonkeyPatch) -> Iterator[pytest.MonkeyPatch]:
     fields = {name.lower() for name in Settings.model_fields}
     for key in list(os.environ):
         k = key.lower()
-        if k in fields or k == "env_file" or (k.startswith(ENV_PREFIX) and k[len(ENV_PREFIX):] in fields):
+        if k in fields or k == "env_file" or (k.startswith(ENV_PREFIX) and k[len(ENV_PREFIX) :] in fields):
             monkeypatch.delenv(key, raising=False)
     get_settings.cache_clear()
     yield monkeypatch
@@ -66,7 +66,7 @@ def file_server() -> Iterator[FileServer]:
 
             start, status = 0, 200
             if range_header and range_header.startswith("bytes="):
-                start = int(range_header[len("bytes="):].split("-", 1)[0])
+                start = int(range_header[len("bytes=") :].split("-", 1)[0])
                 if start >= len(data):
                     return self._empty(416, Content_Range=f"bytes */{len(data)}")
                 status = 206

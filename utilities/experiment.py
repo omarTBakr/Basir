@@ -12,12 +12,14 @@ location, standard tags and failure handling live in one place. Logging problems
 
 from __future__ import annotations
 
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 import logging
 from pathlib import Path
 import subprocess
 from typing import Any
+
+import mlflow
 
 from utilities.config import get_settings
 
@@ -28,15 +30,11 @@ _warned = False
 
 
 @contextmanager
-def start_run(
-    experiment: str, run_name: str | None = None, tags: dict[str, str] | None = None
-) -> Iterator[str | None]:
+def start_run(experiment: str, run_name: str | None = None, tags: dict[str, str] | None = None) -> Iterator[str | None]:
     """Open an MLflow run in `experiment`; yields the run ID (None if MLflow is unavailable)."""
     global _active
     run = None
     try:
-        import mlflow
-
         settings = get_settings()
         mlflow.set_tracking_uri(settings.mlflow_uri)
         if mlflow.get_experiment_by_name(experiment) is None:
@@ -45,7 +43,7 @@ def start_run(
         mlflow.set_experiment(experiment)
         run = mlflow.start_run(run_name=run_name, tags={**_standard_tags(), **(tags or {})})
         _active = True
-    except Exception as e:  # noqa: BLE001 - tracking must never break the caller
+    except Exception as e:
         _warn(f"MLflow tracking disabled for this run: {e}")
 
     try:
@@ -53,43 +51,39 @@ def start_run(
     finally:
         if run is not None:
             _active = False
-            _safe(lambda: __import__("mlflow").end_run())
+            _safe(mlflow.end_run)
 
 
 def log_params(params: dict[str, Any]) -> None:
     if _active:
-        _safe(lambda: __import__("mlflow").log_params({k: str(v) for k, v in params.items()}))
+        _safe(mlflow.log_params, {k: str(v) for k, v in params.items()})
 
 
 def log_metrics(metrics: dict[str, float], step: int | None = None) -> None:
     if _active:
-        clean = {k: float(v) for k, v in metrics.items() if v is not None}
-        _safe(lambda: __import__("mlflow").log_metrics(clean, step=step))
+        _safe(mlflow.log_metrics, {k: float(v) for k, v in metrics.items() if v is not None}, step=step)
 
 
 def log_artifact(path: str | Path, artifact_path: str | None = None) -> None:
     if _active and Path(path).exists():
-        _safe(lambda: __import__("mlflow").log_artifact(str(path), artifact_path))
+        _safe(mlflow.log_artifact, str(path), artifact_path)
 
 
 def _standard_tags() -> dict[str, str]:
     """git commit and dirty flag, Basir version, GPU name: enough to reproduce a run."""
+    import torch
+
     from basir import __version__
 
-    tags = {"basir_version": __version__, "device": get_settings().effective_device}
-    root = get_settings().project_root
+    settings = get_settings()
+    tags = {"basir_version": __version__, "device": settings.effective_device}
     try:
-        tags["git_commit"] = _git(root, "rev-parse", "--short", "HEAD") or "none"
-        tags["git_dirty"] = str(bool(_git(root, "status", "--porcelain")))
+        tags["git_commit"] = _git(settings.project_root, "rev-parse", "--short", "HEAD") or "none"
+        tags["git_dirty"] = str(bool(_git(settings.project_root, "status", "--porcelain")))
     except (OSError, subprocess.SubprocessError):
         tags["git_commit"] = "unknown"
-    try:
-        import torch
-
-        if torch.cuda.is_available():
-            tags["gpu"] = torch.cuda.get_device_name(0)
-    except ImportError:
-        pass
+    if torch.cuda.is_available():
+        tags["gpu"] = torch.cuda.get_device_name(0)
     return tags
 
 
@@ -98,10 +92,10 @@ def _git(root: Path, *args: str) -> str:
     return result.stdout.strip() if result.returncode == 0 else ""
 
 
-def _safe(action: Any) -> None:
+def _safe(action: Callable[..., Any], *args: Any, **kwargs: Any) -> None:
     try:
-        action()
-    except Exception as e:  # noqa: BLE001
+        action(*args, **kwargs)
+    except Exception as e:
         _warn(f"MLflow logging failed: {e}")
 
 

@@ -58,18 +58,13 @@ class Pose:
             raise ValueError(f"Pose matrix must be 4x4, got {self.matrix.shape}")
 
     @classmethod
-    def from_tum(cls, t: float, tx: float, ty: float, tz: float,
-                 qx: float, qy: float, qz: float, qw: float) -> Pose:
+    def from_tum(cls, t: float, tx: float, ty: float, tz: float, qx: float, qy: float, qz: float, qw: float) -> Pose:
         """From a TUM groundtruth line: translation + unit quaternion (x, y, z, w)."""
         return cls(make_transform(quaternion_to_matrix(qx, qy, qz, qw), [tx, ty, tz]), t)
 
     def inverse(self) -> np.ndarray:
         """T_cam_world (world -> camera)."""
         return invert_transform(self.matrix)
-
-    @property
-    def rotation(self) -> np.ndarray:
-        return self.matrix[:3, :3]
 
     @property
     def position(self) -> np.ndarray:
