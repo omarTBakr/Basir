@@ -6,6 +6,22 @@ plus the deployment decision taken since: a realme phone running ARCore records 
 the laptop (RTX 4060, 8 GB) is the server. Class and module names match the planned package layout. Update a
 diagram in the same change as the code that makes it true or different.
 
+## Implementation status (living section, updated as work lands)
+
+_Last updated: 2026-11-10._ ✅ built on [`phase_0`](https://github.com/omarTBakr/Basir/tree/phase_0) · 🔄 being built on a work branch · ⏳ designed, not built.
+
+| Area | Diagrams | Status |
+|---|---|---|
+| Core data model and geometry | [core_types](4_class_diagrams/core_types.png) | ✅ `Frame`, `Pose`, `CameraIntrinsics`, geometry; `Observation` / `ObjectTrack` / `QueryResult` ⏳ |
+| Frame sources and datasets | [ingest_and_spatial](4_class_diagrams/ingest_and_spatial.png) | ✅ `FrameSource`, `TUMDatasetSource`, dataset prep; `ARCoreStreamSource` / `RecordingSource` ⏳ |
+| Replay and evaluation | [replay_eval](3_sequence_diagrams/replay_eval.png), [evaluation](2_use_case_diagrams/evaluation.png) | ✅ replay, point-cloud check with MLflow; 🔄 Temporal pipeline DAG (`pipeline_dag`) |
+| Multi-phone streaming | [phone_stream](3_sequence_diagrams/phone_stream.png), [phone_app](2_use_case_diagrams/phone_app.png) | 🔄 server-side ingest + GPU micro-batching (`server_ui`); phone app ⏳ |
+| Server, UI and observability | system overviews | 🔄 FastAPI UI, Prometheus, Grafana (`server_ui`, `infra_stack`) |
+| Memory building, querying, guidance | [ingest_keyframe](3_sequence_diagrams/ingest_keyframe.png), [query_where_is](3_sequence_diagrams/query_where_is.png), [guidance_reacquire](3_sequence_diagrams/guidance_reacquire.png), [perception](4_class_diagrams/perception.png), [memory](4_class_diagrams/memory.png), [query_and_guidance](4_class_diagrams/query_and_guidance.png) | ⏳ Phases 1–5 |
+| Robot integration | [06_robot_integration](1_user_stories/06_robot_integration.png) | ⏳ Phase 7 |
+
+**Diagrams to add once the work branches merge:** the async ingest design (per-phone latest-frame queues → spawned GPU worker with micro-batching), the Temporal pipeline DAG and its MLflow parent/child runs, and the deployment view (Docker Compose: Postgres, MLflow, Temporal, Prometheus, Grafana; FastAPI server; phones).
+
 ## Observability
 
 Two tools, two questions. **MLflow** answers "did this change make Basir better?": one run per script or evaluation, with params, metrics and artifacts (`utilities/experiment.py`). **Langfuse** answers "what happened in this one request?": a trace per query with each step, LLM/VLM calls, latency and cost (`utilities/tracing.py`, off until keys are set).
