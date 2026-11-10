@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Basir · {{ title }}</title>
+  <link rel="stylesheet" href="{{ url_for('static', path='style.css') }}">
+  <script>
+    // Theme: saved choice, else the system setting. Runs before paint to avoid a flash.
+    (function () {
+      let saved = null;
+      try { saved = localStorage.getItem("basir-theme"); } catch (e) {}
+      const dark = saved ? saved === "dark" : matchMedia("(prefers-color-scheme: dark)").matches;
+      document.documentElement.dataset.theme = dark ? "dark" : "light";
+    })();
+  </script>
+  <script src="https://cdn.jsdelivr.net/npm/htmx.org@2.0.4/dist/htmx.min.js"></script>
+</head>
+<body>
+  <header>
+    <a class="brand" href="/live">Basir</a>
+    <nav>
+      {% for key, label in [("live", "Live"), ("pipelines", "Pipelines"), ("experiments", "Experiments"), ("dashboards", "Dashboards")] %}
+      <a href="/{{ key }}" {% if page == key %}aria-current="page"{% endif %}>{{ label }}</a>
+      {% endfor %}
+    </nav>
+    <button id="theme-toggle" type="button" aria-label="Toggle light / dark theme">◐</button>
+  </header>
+  <main>
+    <h1>{{ title }}</h1>
+    {% block content %}{% endblock %}
+  </main>
+  <script>
+    document.getElementById("theme-toggle").addEventListener("click", () => {
+      const next = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
+      document.documentElement.dataset.theme = next;
+      try { localStorage.setItem("basir-theme", next); } catch (e) {}
+      document.dispatchEvent(new CustomEvent("basir:theme", { detail: next }));
+    });
+  </script>
+</body>
+</html>

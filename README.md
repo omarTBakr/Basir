@@ -35,6 +35,7 @@ The stage built today is **Phase 0, the foundation**: replay a recorded RGB-D sc
 
 - [Phase 0 check](#phase-0-check)
 - [Quickstart](#quickstart)
+- [Server and UI](#server-and-ui)
 - [Configuration](#configuration)
 - [Features](#features)
 - [Roadmap](#roadmap)
@@ -99,6 +100,48 @@ Notes:
 - **A preset that isn't downloaded yet** makes `replay.py` and `visualize_pointcloud.py` stop with the exact download command to run.
 - **The toy dataset** (`download_dataset.py --create-toy-dataset --name toy_room`) is a tiny synthetic TUM-format scene used by the tests. It's handy for trying the scripts offline.
 
+## Server and UI
+
+One FastAPI process on `http://127.0.0.1:8000` takes frames from several phones at once, runs them on the GPU, exports Prometheus metrics at `/metrics` and serves a small web UI that summarises everything else (MLflow, Temporal, Grafana).
+
+```bash
+uv run python scripts/serve.py                         # http://127.0.0.1:8000 (--host 0.0.0.0 for phones on the LAN)
+uv run python scripts/simulate_phones.py 2             # 2 phones replay fr1/desk at 15 fps for 30 s, then print stats
+uv run python scripts/simulate_phones.py 4 --fps 30 --duration 60 --dataset fr1/room
+```
+
+| Page | Shows |
+|---|---|
+| **Live** | Connected phones with frames/s, received, dropped, queue depth, mean batch size, inference time and end-to-end latency (p50 / p95). Polls every 2 s. |
+| **Pipelines** | Temporal workflows (running first) with status, and the recent pipeline runs from MLflow, each with its DAG drawn from `dag.json` and every step coloured by `basir.status`. One link to the Temporal UI and one to the MLflow run. |
+| **Experiments** | The MLflow layer: what is running now, the latest run of each experiment with pass / fail and 3 to 5 key metrics (consistency median, within 5 cm, fps, ...), and one link to the full run. |
+| **Dashboards** | Grafana panels and whole dashboards (host, GPU, Postgres, Temporal, server) embedded in kiosk mode, plus whether Grafana, Prometheus and Prometheus's scrape of this server are up. Panels are listed once in [`basir/api/grafana.py`](basir/api/grafana.py). |
+
+Every external service is optional: when one is down, its section says *not reachable* and the rest of the page still works. The pages are server-rendered Jinja2 with [HTMX](https://htmx.org) (pinned, from a CDN) polling the live parts; the DAG is plain SVG drawn by the server, and there's a light and a dark theme.
+
+**Multi-phone ingest.** Each phone holds one WebSocket at `/ws/stream/{device_id}` and sends one binary message per frame: a 4-byte big-endian header length, a small JSON header (`seq`, `timestamp`, optional `pose` as a row-major 4x4, optional `intrinsics`), then the JPEG. The server answers each processed frame with a JSON text message (`seq`, `batch_size`, `queue_ms`, `inference_ms`, `latency_ms`, `dropped`). The format is documented in [`basir/api/protocol.py`](basir/api/protocol.py).
+
+```mermaid
+flowchart LR
+  p1["phone 1"] -- "JPEG + JSON header" --> ws1["WebSocket<br/>/ws/stream/phone-1"]
+  p2["phone 2"] --> ws2["WebSocket<br/>/ws/stream/phone-2"]
+  ws1 --> q1["queue phone-1<br/>latest frame wins"]
+  ws2 --> q2["queue phone-2<br/>latest frame wins"]
+  q1 & q2 --> batcher["batcher<br/>≤ 8 frames or 20 ms"]
+  batcher -- "pipe" --> gpu["GPU worker process<br/>(spawn, model loaded once)"]
+  gpu --> batcher
+  batcher -- "result" --> ws1 & ws2
+```
+
+- **One small queue per phone, newest frame wins.** When a phone sends faster than the GPU keeps up, the oldest waiting frame is dropped and counted (`basir_frames_dropped_total`). A late frame is worth less than a fresh one for guidance, so latency stays bounded instead of growing with a backlog.
+- **One GPU worker, micro-batched across phones.** A batch closes at 8 frames or 20 ms after its first frame, whichever comes first, so frames from several phones share one GPU call. The worker is a separate process started with `spawn`: the models load once there, and the server process never initialises CUDA.
+- **Results go back on the same socket**, tagged with the phone's own `seq`.
+- **Swappable.** The queues sit behind a small `FrameBus` interface ([`basir/api/framebus.py`](basir/api/framebus.py)) and the worker behind `InferenceBackend` ([`basir/api/worker.py`](basir/api/worker.py)), so Redis Streams or a second GPU can replace them without touching the WebSocket code. Until Phase 1 the "model" is a stub that decodes, resizes and runs one convolution on the GPU, so the timings are realistic.
+
+**Why asyncio and not Celery or Temporal for frames?** A frame is worth something for about 100 ms. Celery and Temporal are built for durable work that must not be lost: they persist every task, retry it and pay a broker or history round trip per task. For a 15 fps stream from each phone that's the wrong trade: the overhead is larger than the work, and a retried frame from two seconds ago is useless. In-process asyncio queues cost microseconds, dropping is the right failure mode, and one process owns the GPU. Temporal still runs the durable work (dataset preparation, evaluation pipelines) shown on the Pipelines page.
+
+**Metrics** (prefix `basir_`, scraped by Prometheus and shown on Grafana's "Basir server" dashboard): `http_requests_total{method,path,status}`, `http_request_seconds`, `ws_connections`, `frames_received_total{device}`, `frames_dropped_total{device}`, `queue_depth{device}`, `batch_size`, `inference_seconds`, `frame_latency_seconds` (receipt to result). Every HTTP request and WebSocket gets an `X-Request-ID` (kept from the client when valid).
+
 ## Configuration
 
 **Environment (`.env`):** every key is defined in [`utilities/config.py`](utilities/config.py). Real environment variables override the file, and `BASIR_<NAME>` overrides `<NAME>`, so generic names like `DEVICE` can be pinned. Only what the built phases use is configurable; each later phase adds its own settings.
@@ -108,8 +151,13 @@ Notes:
 | `APP_ENV` | `development`, `staging` or `production`; also tags Langfuse traces |
 | `DEVICE` | `auto`, `cuda`, `cpu` or `mps`; `auto` picks CUDA when available |
 | `DATA_DIR` | Root for `datasets/`, `outputs/`, `mlflow.db` and `mlartifacts/` (default: the project folder) |
-| `MLFLOW_TRACKING_URI` | Where runs are recorded (default: `sqlite:///<DATA_DIR>/mlflow.db`) |
+| `MLFLOW_TRACKING_URI` | Where runs are recorded (default: `sqlite:///<DATA_DIR>/mlflow.db`); an `http://` server also enables the UI's run links |
 | `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY`, `LANGFUSE_BASE_URL` | Runtime tracing; off until both keys are set (default URL: Langfuse Cloud) |
+| `GRAFANA_URL` | Grafana embedded on the Dashboards page (default `http://127.0.0.1:3000`) |
+| `PROMETHEUS_URL` | Prometheus, for the scrape status (default `http://127.0.0.1:9090`) |
+| `TEMPORAL_ADDRESS`, `TEMPORAL_UI_URL` | Temporal frontend (gRPC, default `127.0.0.1:7233`) and its web UI for links (default `http://127.0.0.1:8233`) |
+| `INGEST_QUEUE_SIZE` | Frames kept per phone before the oldest is dropped (default 2) |
+| `BATCH_MAX_SIZE`, `BATCH_MAX_WAIT_MS` | GPU micro-batch: at most this many frames, or this long after the first (defaults 8 and 20) |
 
 The default camera (TUM / Kinect v1 intrinsics) is a read-only property on `Settings`, used when a dataset has no calibration of its own.
 
@@ -142,7 +190,7 @@ The default camera (TUM / Kinect v1 intrinsics) is a read-only property on `Sett
 | 3 L2 spatial memory: 3D object positions, 3D fusion, bearing + distance directions | Planned |
 | 4 Re-acquisition and segmentation: live guidance, "Found it!" mask, tracking, moved-object handling | Planned |
 | 5 Smart querying: LLM query parsing, hybrid retrieval, VLM reranking | Planned |
-| 6 Real-time live pipeline: ARCore phone app streaming to the laptop, async workers, latency budget | Planned |
+| 6 Real-time live pipeline: ARCore phone app streaming to the laptop, async workers, latency budget | Server side started: multi-phone ingest, GPU worker, metrics and UI ([Server and UI](#server-and-ui)); phone app planned |
 | 7 Robot integration: ROS 2, Nav2 paths (L3) | Planned |
 | 8 Evaluation and hardening (ongoing) | Planned |
 
@@ -153,7 +201,7 @@ The phone choice is behind phases 3+: it needs ARCore with the **Depth API** (re
 ```mermaid
 flowchart TB
   subgraph entry["scripts/ (command line only)"]
-    scripts["download_dataset · check_env · replay · visualize_pointcloud"]
+    scripts["download_dataset · check_env · replay · visualize_pointcloud · serve · simulate_phones"]
   end
   subgraph domain["basir/"]
     core["core/<br/>types · geometry"]
@@ -161,6 +209,7 @@ flowchart TB
     sources["ingest/sources/<br/>FrameSource · TUMDatasetSource"]
     playback["ingest/playback<br/>Pacer · PlaybackStats"]
     spatial["spatial/pointcloud<br/>build · score · top view"]
+    api["api/<br/>ingest · framebus · batcher · worker<br/>metrics · mlflow_view · temporal_view · ui"]
   end
   subgraph shared["utilities/"]
     config["config<br/>Settings"]
@@ -173,6 +222,9 @@ flowchart TB
   scripts --> playback
   scripts --> spatial
   scripts --> exp
+  scripts --> api
+  api --> sources
+  api --> config
   datasets --> util
   datasets --> config
   sources --> datasets
@@ -187,6 +239,7 @@ flowchart TB
 - **Scripts are thin.** Each one parses arguments, calls `basir/`, and logs to MLflow. No script imports another script, so everything reusable lives in the library.
 - **One job per module.** Dataset preparation is split into the catalogue (`presets`), the index files (`layout`), the synthetic test data (`toy`) and the download pipeline (`prepare`). Playback pacing is separate from any display, and map building (`spatial/pointcloud`) is separate from the viewer.
 - **Frame sources are interchangeable.** Anything that yields `Frame`s satisfies [`FrameSource`](basir/ingest/sources/base.py): the TUM dataset today, phone recordings and the live ARCore stream later.
+- **The server is one process plus one GPU worker.** [`basir/api`](basir/api/__init__.py) holds the FastAPI app: phone ingest, micro-batching, the spawned GPU worker, Prometheus metrics and the UI. See [Server and UI](#server-and-ui).
 - **Geometry has no I/O.** [`basir/core`](basir/core/) depends on numpy only, so it's fast to test and safe to reuse in every phase.
 - **Scripts never import MLflow or Langfuse directly.** They go through [`utilities/experiment.py`](utilities/experiment.py) and [`utilities/tracing.py`](utilities/tracing.py). Logging failures produce one warning and never stop a run.
 
@@ -236,8 +289,27 @@ Basir/
 │   │   │   ├── base.py             # FrameSource interface
 │   │   │   └── tum.py              # TUMDatasetSource
 │   │   └── playback.py             # real-time pacing and playback statistics
-│   └── spatial/
-│       └── pointcloud.py           # fused cloud, consistency score, top-down image
+│   ├── spatial/
+│   │   └── pointcloud.py           # fused cloud, consistency score, top-down image
+│   └── api/                        # the server: phone ingest, GPU worker, metrics, web UI
+│       ├── app.py                  # app factory; lifespan starts the GPU worker and batcher
+│       ├── protocol.py             # wire format: JPEG + JSON header in, JSON result out
+│       ├── framebus.py             # per-phone latest-frame-wins queues (FrameBus interface)
+│       ├── batcher.py              # micro-batching across phones, result routing
+│       ├── worker.py               # spawned GPU process (InferenceBackend) + stub model
+│       ├── devices.py              # connected phones and their rolling stats
+│       ├── ingest.py               # /ws/stream/{device_id}
+│       ├── metrics.py              # Prometheus metrics, HTTP timing, /metrics
+│       ├── middleware.py           # request IDs (HTTP + WebSocket)
+│       ├── mlflow_view.py          # MLflow layer: running, latest per experiment, pipelines
+│       ├── temporal_view.py        # running / recent Temporal workflows
+│       ├── dag.py                  # dag.json parsing and SVG layout
+│       ├── services.py             # Grafana / Prometheus reachability
+│       ├── grafana.py              # which dashboards and panels are embedded
+│       ├── phone_simulator.py      # phones replaying a dataset over WebSocket
+│       ├── ui.py                   # pages and HTMX fragments
+│       ├── templates/              # Jinja2 (Live, Pipelines, Experiments, Dashboards)
+│       └── static/style.css        # light / dark theme
 ├── utilities/
 │   ├── config.py                   # Settings (.env + environment)
 │   ├── experiment.py               # MLflow run tracking
@@ -247,7 +319,9 @@ Basir/
 │   ├── download_dataset.py         # get a preset / URL / archive ready on disk
 │   ├── check_env.py                # versions, CUDA, paths, Langfuse smoke trace
 │   ├── replay.py                   # real-time RGB-D playback window
-│   └── visualize_pointcloud.py     # the Phase 0 check
+│   ├── visualize_pointcloud.py     # the Phase 0 check
+│   ├── serve.py                    # run the server on :8000
+│   └── simulate_phones.py          # N simulated phones streaming a dataset
 ├── tests/                          # one test file per module + shared fixtures
 ├── logo/                           # logo (scan + chat) and README image, light / dark SVG + PNG
 │   └── src/                        # generators that rebuild them from the Phase 0 scan
