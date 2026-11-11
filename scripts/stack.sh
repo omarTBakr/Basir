@@ -11,12 +11,25 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-ENV_FILE="$ROOT/infra/stack.env"
+COMPOSE_FILE="$ROOT/Docker/docker-compose.yml"
+ENV_FILE="$ROOT/env/stack.env"
 CONTEXT="${BASIR_DOCKER_CONTEXT:-default}"
 export HOST_UID="${HOST_UID:-$(id -u)}"
 
 compose() {
-    docker --context "$CONTEXT" compose --project-directory "$ROOT" --env-file "$ENV_FILE" "$@"
+    export_artifacts_dir
+    docker --context "$CONTEXT" compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" "$@"
+}
+
+# Compose resolves relative bind paths from each service's folder (Docker/<service>/), so a
+# relative MLFLOW_ARTIFACTS_DIR from env/stack.env is made absolute from the project root
+# here. A variable exported in the shell wins over the --env-file value.
+export_artifacts_dir() {
+    local dir
+    dir="${MLFLOW_ARTIFACTS_DIR:-$(sed -n 's/^MLFLOW_ARTIFACTS_DIR=//p' "$ENV_FILE" 2>/dev/null | tail -n 1)}"
+    dir="${dir:-mlartifacts}"
+    [[ "$dir" == /* ]] || dir="$ROOT/${dir#./}"
+    export MLFLOW_ARTIFACTS_DIR="$dir"
 }
 
 ensure_engine() {
@@ -29,10 +42,10 @@ ensure_engine() {
 
 ensure_env_file() {
     [[ -f "$ENV_FILE" ]] && return
-    echo "Creating infra/stack.env with random passwords"
+    echo "Creating env/stack.env with random passwords"
     sed -e "s/^POSTGRES_PASSWORD=.*/POSTGRES_PASSWORD=$(openssl rand -hex 16)/" \
         -e "s/^GRAFANA_ADMIN_PASSWORD=.*/GRAFANA_ADMIN_PASSWORD=$(openssl rand -hex 12)/" \
-        "$ROOT/infra/stack.env.example" >"$ENV_FILE"
+        "$ROOT/env/stack.env.example" >"$ENV_FILE"
     chmod 600 "$ENV_FILE"
 }
 
@@ -43,7 +56,7 @@ print_urls() {
 
   MLflow          http://127.0.0.1:5000
   Temporal UI     http://127.0.0.1:8233   (gRPC 127.0.0.1:7233)
-  Grafana         http://127.0.0.1:3000   (admin login in infra/stack.env)
+  Grafana         http://127.0.0.1:3000   (admin login in env/stack.env)
   Prometheus      http://127.0.0.1:9090
   Postgres        127.0.0.1:${pg_port:-5433}
 EOF

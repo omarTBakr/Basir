@@ -51,7 +51,7 @@ def langfuse_smoke() -> bool:
 
     tracer = get_tracer()
     if tracer is None:
-        print("langfuse      skipped: set LANGFUSE_PUBLIC_KEY and LANGFUSE_SECRET_KEY in .env")
+        print("langfuse      skipped: set LANGFUSE_PUBLIC_KEY and LANGFUSE_SECRET_KEY in env/.env")
         return False
     if not tracer.auth_check():
         print("langfuse      AUTH FAILED: check the keys and LANGFUSE_BASE_URL")

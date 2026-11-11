@@ -67,7 +67,7 @@ def test_tracer_start_failure_disables_tracing(
 
 @pytest.mark.network
 def test_live_langfuse_auth() -> None:
-    """Runs only with -m network and real keys in .env."""
+    """Runs only with -m network and real keys in env/.env."""
     from utilities.config import Settings
 
     if not Settings().langfuse_enabled:

@@ -1,0 +1,27 @@
+# Temporal web UI on 127.0.0.1:8233. CORS allows the Basir server (:8000) to link to it.
+
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: 10m
+    max-file: "3"
+
+services:
+  temporal-ui:
+    image: temporalio/ui:2.56.0
+    restart: unless-stopped
+    logging: *logging
+    depends_on:
+      temporal:
+        condition: service_healthy
+    environment:
+      TEMPORAL_ADDRESS: temporal:7233
+      TEMPORAL_UI_PORT: "8080"
+      TEMPORAL_CORS_ORIGINS: http://127.0.0.1:8000,http://localhost:8000
+    ports:
+      - 127.0.0.1:8233:8080
+    healthcheck:
+      test: [CMD-SHELL, "wget -qO /dev/null http://127.0.0.1:8080/ || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
