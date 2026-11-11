@@ -8,20 +8,27 @@ license-files = ["LICENSE"]
 classifiers = ["Private :: Do Not Upload"]
 requires-python = ">=3.12"
 dependencies = [
+    "fastapi>=0.162.2",
+    "httpx>=0.28.1",
+    "jinja2>=3.1.6",
     "langfuse>=5.2.0",
     "mlflow>=3.18.0",
     "numpy>=2.5.4",
     "open3d>=0.20.0",
     "opencv-python>=5.0.0.93",
+    "prometheus-client>=0.26.0",
     "pydantic>=2.14.3",
     "temporalio>=1.35.0",
     "torch>=2.15.0",
     "tqdm>=4.70.1",
+    "uvicorn[standard]>=0.54.0",
+    "websockets>=17.4",
 ]
 
 [dependency-groups]
 dev = [
     "dvc>=3.67.1",
+    "httpx2>=2.16.0",
     "pytest>=9.2.0",
     "ruff==0.15.4",
     "scipy>=1.18.1",

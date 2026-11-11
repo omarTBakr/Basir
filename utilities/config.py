@@ -44,10 +44,19 @@ class Settings(BaseModel):
     langfuse_public_key: str | None = Field(default=None, description="Langfuse public key")
     langfuse_secret_key: str | None = Field(default=None, description="Langfuse secret key")
     langfuse_base_url: str | None = Field(default=None, description="Langfuse URL (default: Langfuse Cloud)")
-    prometheus_url: str = Field(default="http://127.0.0.1:9090", description="Prometheus of the local stack")
 
     # Orchestration: Temporal runs the pipelines
     temporal_address: str = Field(default="127.0.0.1:7233", description="Temporal frontend host:port")
+
+    # Server and UI: the services it summarises (all optional; shown as "not reachable" when down)
+    grafana_url: str = Field(default="http://127.0.0.1:3000", description="Grafana, embedded on the Dashboards page")
+    prometheus_url: str = Field(default="http://127.0.0.1:9090", description="Prometheus, scrapes /metrics")
+    temporal_ui_url: str = Field(default="http://127.0.0.1:8233", description="Temporal web UI, for deep links")
+
+    # Live ingest: per-phone queues and the GPU worker's micro-batches
+    ingest_queue_size: int = Field(default=2, ge=1, description="Frames kept per phone; older ones are dropped")
+    batch_max_size: int = Field(default=8, ge=1, description="Most frames per GPU batch")
+    batch_max_wait_ms: float = Field(default=20.0, ge=0, description="Longest wait to fill a batch")
 
     def __init__(self, _env_file: Path | str | None = None, **values: Any):
         """Load settings. An explicit `_env_file` is used on its own: if it does not
@@ -107,6 +116,12 @@ class Settings(BaseModel):
     @property
     def mlflow_artifacts_dir(self) -> Path:
         return self.base_data_dir / "mlartifacts"
+
+    @property
+    def mlflow_ui_url(self) -> str | None:
+        """The MLflow web UI for deep links: the tracking URI when it is an HTTP server, else None."""
+        uri = self.mlflow_uri
+        return uri.rstrip("/") if uri.startswith(("http://", "https://")) else None
 
     @property
     def langfuse_enabled(self) -> bool:

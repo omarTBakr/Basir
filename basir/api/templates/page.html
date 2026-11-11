@@ -1,0 +1,6 @@
+{% extends "base.html" %}
+{% block content %}
+<div hx-get="/partials/{{ page }}" hx-trigger="load, every {{ poll_s }}s" hx-swap="innerHTML">
+  <p class="muted">Loading…</p>
+</div>
+{% endblock %}

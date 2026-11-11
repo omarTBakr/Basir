@@ -1,0 +1,38 @@
+<p class="muted">
+  GPU worker on <strong>{{ worker_device }}</strong> ·
+  batches of up to {{ batch_max_size }} frames or {{ batch_max_wait_ms | num }} ms ·
+  {{ queue_size }} frame{{ "s" if queue_size != 1 }} kept per phone (older ones dropped)
+</p>
+{% if devices %}
+<div class="table-wrap">
+<table>
+  <thead>
+    <tr>
+      <th>Phone</th><th class="n">Connected</th><th class="n">Frames/s</th><th class="n">Received</th>
+      <th class="n">Dropped</th><th class="n">Queue</th><th class="n">Batch size</th>
+      <th class="n">Inference</th><th class="n">Latency p50</th><th class="n">Latency p95</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for d in devices %}
+    <tr>
+      <td><span class="dot ok"></span>{{ d.device }}</td>
+      <td class="n">{{ d.connected_s | num }} s</td>
+      <td class="n">{{ d.fps }}</td>
+      <td class="n">{{ d.received }}</td>
+      <td class="n {% if d.dropped %}warn{% endif %}">{{ d.dropped }}{% if d.received %} <span class="muted">({{ (100 * d.dropped / d.received) | round(1) }}%)</span>{% endif %}</td>
+      <td class="n">{{ d.queue_depth }}</td>
+      <td class="n">{{ d.batch_size }}</td>
+      <td class="n">{{ d.inference_ms }} ms</td>
+      <td class="n">{{ d.latency_p50_ms }} ms</td>
+      <td class="n">{{ d.latency_p95_ms }} ms</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+</div>
+{% else %}
+<div class="empty">
+  No phones connected. Try <code>uv run python scripts/simulate_phones.py 2</code>.
+</div>
+{% endif %}
