@@ -8,6 +8,7 @@ import pytest
 
 import utilities.config as config
 from utilities.config import Settings, get_settings
+from utilities.utility import parse_env_file
 
 # ---------------------------------------------------------------------------
 # Loading and precedence
@@ -15,10 +16,10 @@ from utilities.config import Settings, get_settings
 
 
 def test_defaults_when_explicit_file_is_missing(tmp_path: Path, clean_env: pytest.MonkeyPatch) -> None:
-    """A missing explicit env file must NOT fall back to the project's real .env."""
+    """A missing explicit env file must NOT fall back to the project's real env/.env."""
     project = tmp_path / "project"
-    project.mkdir()
-    (project / ".env").write_text("APP_ENV=production\nDEVICE=cpu\n")
+    (project / "env").mkdir(parents=True)
+    (project / "env" / ".env").write_text("APP_ENV=production\nDEVICE=cpu\n")
     clean_env.setattr(config, "PROJECT_ROOT", project)
 
     s = Settings(_env_file=tmp_path / "non_existent.env")
@@ -27,9 +28,23 @@ def test_defaults_when_explicit_file_is_missing(tmp_path: Path, clean_env: pytes
 
 
 def test_project_env_is_used_by_default(tmp_path: Path, clean_env: pytest.MonkeyPatch) -> None:
-    (tmp_path / ".env").write_text("APP_ENV=staging\n")
+    (tmp_path / "env").mkdir()
+    (tmp_path / "env" / ".env").write_text("APP_ENV=staging\n")
     clean_env.setattr(config, "PROJECT_ROOT", tmp_path)
     assert Settings().app_env == "staging"
+
+
+def test_root_env_file_is_no_longer_read(tmp_path: Path, clean_env: pytest.MonkeyPatch) -> None:
+    """Settings live in env/.env; a leftover .env at the project root is ignored."""
+    (tmp_path / ".env").write_text("APP_ENV=old-location\n")
+    clean_env.setattr(config, "PROJECT_ROOT", tmp_path)
+    assert Settings().app_env == "development"
+
+
+def test_env_example_only_names_known_settings() -> None:
+    keys = parse_env_file(config.PROJECT_ROOT / "env" / ".env.example")
+    assert keys
+    assert {key.lower() for key in keys} <= set(Settings.model_fields)
 
 
 def test_env_file_variable_is_used(tmp_path: Path, clean_env: pytest.MonkeyPatch) -> None:

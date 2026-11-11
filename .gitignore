@@ -10,8 +10,10 @@ wheels/
 .venv
 
 # Secrets
+# env/ holds the settings (.env) and the stack passwords (stack.env); only the *.example files are committed
+/env/.env
+/env/stack.env
 .env
-infra/stack.env
 
 # Data, models and runtime output (kept on disk, never committed)
 # datasets/<sequence>/ folders stay out of git; DVC versions them (datasets/*.dvc are committed)

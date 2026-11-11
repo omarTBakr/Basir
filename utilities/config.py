@@ -1,10 +1,10 @@
 """Basir settings.
 
 `Settings` holds two kinds of configuration:
-    * Fields: values that can change per machine, read from `.env` and the environment.
+    * Fields: values that can change per machine, read from `env/.env` and the environment.
     * Properties: derived paths and fixed constants.
 
-Precedence, lowest to highest: field default < .env file < <FIELD> env var
+Precedence, lowest to highest: field default < env/.env file < <FIELD> env var
 < BASIR_<FIELD> env var < keyword arguments.
 
 Only what the built phases use lives here; each later phase adds its own settings.
@@ -25,6 +25,9 @@ from pydantic import BaseModel, ConfigDict, Field
 from utilities.utility import parse_env_file
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
+
+# Folder (under the project root) holding the settings file .env and the stack's stack.env.
+ENV_DIR = "env"
 
 # Optional environment prefix: BASIR_DEVICE overrides DEVICE.
 ENV_PREFIX = "basir_"
@@ -60,7 +63,7 @@ class Settings(BaseModel):
 
     def __init__(self, _env_file: Path | str | None = None, **values: Any):
         """Load settings. An explicit `_env_file` is used on its own: if it does not
-        exist, no .env file is read (it never falls back to the project's .env)."""
+        exist, no env file is read (it never falls back to the project's env/.env)."""
         fields = {name.lower(): name for name in type(self).model_fields}
         env_file = Path(_env_file) if _env_file else _default_env_file()
 
@@ -167,10 +170,10 @@ class Settings(BaseModel):
 
 
 def _default_env_file() -> Path | None:
-    """$ENV_FILE if set, else <project>/.env if it exists."""
+    """$ENV_FILE if set, else <project>/env/.env if it exists."""
     if os.getenv("ENV_FILE"):
         return Path(os.environ["ENV_FILE"])
-    candidate = PROJECT_ROOT / ".env"
+    candidate = PROJECT_ROOT / ENV_DIR / ".env"
     return candidate if candidate.is_file() else None
 
 

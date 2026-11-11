@@ -1,0 +1,32 @@
+# MLflow tracking server (Dockerfile adds the Postgres driver to the upstream image).
+# Artifacts go to MLFLOW_ARTIFACTS_DIR on the host; blank = <project>/mlartifacts.
+# scripts/stack.sh turns a relative MLFLOW_ARTIFACTS_DIR into an absolute path from the
+# project root, because compose would resolve it from this folder.
+
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: 10m
+    max-file: "3"
+
+services:
+  mlflow:
+    build: .
+    image: basir/mlflow:3.18.0
+    restart: unless-stopped
+    logging: *logging
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      MLFLOW_BACKEND_STORE_URI: postgresql+psycopg2://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/mlflow
+    volumes:
+      - ${MLFLOW_ARTIFACTS_DIR:-../../mlartifacts}:/mlartifacts
+    ports:
+      - 127.0.0.1:5000:5000
+    healthcheck:
+      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:5000/health', timeout=4)"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 60s
