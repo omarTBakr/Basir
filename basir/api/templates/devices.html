@@ -11,13 +11,20 @@
     <p class="muted">Loading…</p>
   </div>
   <div>
+    {% for net in networks %}
     <div class="card">
-      <strong>Scan with the phone</strong>
-      <p class="muted">Use the phone's camera app (or open the address in Chrome on the phone).</p>
-      <div id="qr" class="qr" data-text="{{ phone_url }}" aria-label="QR code for {{ phone_url }}"></div>
-      <p><code>{{ phone_url }}</code></p>
-      <p class="muted" style="font-size:13px">Laptop: {{ laptop }}. Nothing to install on the phone: the page streams from Chrome. For depth and the 3D map, use an ARCore phone with Google Play Services for AR.</p>
+      {% if net.kind == "hotspot" %}
+      <strong>Phone on this laptop's hotspot</strong>
+      <p class="muted">For a phone joined to the Wi-Fi this laptop shares ({{ net.interface }}). Fedora's firewall blocks hotspot clients until you allow the port once: <code>sudo firewall-cmd --zone=nm-shared --add-port=8001/tcp</code></p>
+      {% else %}
+      <strong>Phone on your router's Wi-Fi</strong>
+      <p class="muted">For a phone on the same router as this laptop ({{ net.interface }}). Scan with the phone's camera app, or open the address in Chrome.</p>
+      {% endif %}
+      <div class="qr" data-text="{{ net.url }}" aria-label="QR code for {{ net.url }}"></div>
+      <p><code>{{ net.url }}</code></p>
     </div>
+    {% endfor %}
+    <p class="muted" style="font-size:13px">Laptop: {{ laptop }}. Nothing to install on the phone: the page streams from Chrome. Depth and the 3D map need an ARCore phone with Google Play Services for AR; other phones stream colour only.</p>
     <details class="card advanced">
       <summary>Advanced: pair by hand</summary>
       <p class="muted">For a client that can't ask to pair (a script, a test rig): create a token and paste it into the client. It is shown once.</p>
@@ -30,13 +37,12 @@
   </div>
 </div>
 <script>
-  (() => {
-    const box = document.getElementById("qr");
+  document.querySelectorAll(".qr[data-text]").forEach((box) => {
     if (typeof qrcode !== "function") { box.textContent = box.dataset.text; return; }
     const qr = qrcode(0, "M");
     qr.addData(box.dataset.text);
     qr.make();
     box.innerHTML = qr.createSvgTag({ cellSize: 4, margin: 2, scalable: true });
-  })();
+  });
 </script>
 {% endblock %}

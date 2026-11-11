@@ -30,7 +30,7 @@ import uvicorn
 from basir.api.app import create_app
 from basir.api.embed import create_proxy_app
 from basir.api.ingest import create_ingest_app
-from basir.api.lan import lan_address
+from basir.api.lan import lan_addresses
 from basir.api.tls import ensure_certificate
 from utilities.config import get_settings
 
@@ -69,17 +69,12 @@ def main(argv: list[str] | None = None) -> int:
 
     servers = [server(console, "127.0.0.1", args.port, "Console")]
     if not args.no_lan:
-        address = lan_address()
-        tls = ensure_certificate(settings.certs_dir, address) if settings.ingest_tls else None
+        addresses = [ip for _, ip in lan_addresses()] or ["127.0.0.1"]
+        tls = ensure_certificate(settings.certs_dir, addresses) if settings.ingest_tls else None
         phones = server(create_ingest_app(console), settings.ingest_host, settings.ingest_port, "Phones", tls)
         servers.append(phones)
-        scheme = "https" if tls else "http"
-        logger.info(
-            "Phones open %s://%s:%d on the same Wi-Fi (Devices tab shows a QR code)",
-            scheme,
-            address,
-            settings.ingest_port,
-        )
+        for address in addresses:
+            logger.info("Phones open %s://%s:%d", "https" if tls else "http", address, settings.ingest_port)
     if settings.mlflow_ui_url:
         servers.append(
             server(create_proxy_app(settings.mlflow_ui_url), "127.0.0.1", settings.mlflow_embed_port, "MLflow UI")

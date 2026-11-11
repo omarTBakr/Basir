@@ -43,7 +43,9 @@ Nothing is installed on the phone: the phone listener serves a **phone page** th
 
 **Tokens.** Only a token's SHA-256 hash is stored, in `<DATA_DIR>/devices.json` (git-ignored). The phone sends it as `?token=...` or `Authorization: Bearer ...`; a missing or wrong token is closed with code **1008**. **Forget** on the Devices tab revokes it. *Advanced: pair by hand* creates a token for a client that can't ask to pair.
 
-**Firewall.** If the phone can't open the page, allow the port: `sudo firewall-cmd --add-port=8001/tcp` (Fedora).
+**Which network.** The phone joins the same Wi-Fi as the laptop: the router the laptop is on, or a hotspot the laptop shares. The Devices tab shows one QR code per network the laptop is on, and the certificate covers every one of those addresses.
+
+**Firewall.** On Fedora, a hotspot the laptop shares (NetworkManager zone `nm-shared`) blocks its clients until the port is allowed once: `sudo firewall-cmd --zone=nm-shared --add-port=8001/tcp` (add `--permanent` to keep it). For the router's network the Workstation zone already allows high ports; otherwise `sudo firewall-cmd --add-port=8001/tcp`. "This site can't be reached" on the phone means the firewall or the network, not the page.
 
 **Embedded MLflow and Temporal.** Both UIs send `X-Frame-Options: SAMEORIGIN` and load assets from absolute paths, so the Console can neither frame them nor host them under a prefix. Each gets its own loopback port that forwards every request unchanged and strips only `X-Frame-Options` (and a CSP `frame-ancestors`) ([`embed.py`](../basir/api/embed.py)). The MLflow copy runs only when `MLFLOW_TRACKING_URI` is an HTTP server.
 

@@ -10,16 +10,31 @@ from fastapi import APIRouter, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse
 
 from basir.api.ingest import DEVICE_ID, IngestState
-from basir.api.lan import lan_address
+from basir.api.lan import lan_address, lan_addresses
 from basir.api.ui import live_stats, templates
 
 router = APIRouter(include_in_schema=False)
 
 
-def phone_url(request: Request) -> str:
-    """The address a phone opens (the QR code): the phone listener on this laptop's LAN address."""
+HOTSPOT_PREFIX = "10.42."  # NetworkManager's address range for a hotspot the laptop shares
+
+
+def phone_url(request: Request, address: str | None = None) -> str:
+    """The address a phone opens (a QR code): the phone listener on one of this laptop's addresses."""
     settings = request.app.state.settings
-    return f"{'https' if settings.ingest_tls else 'http'}://{lan_address()}:{settings.ingest_port}/"
+    return f"{'https' if settings.ingest_tls else 'http'}://{address or lan_address()}:{settings.ingest_port}/"
+
+
+def networks(request: Request) -> list[dict[str, str]]:
+    """One entry per network a phone can join: the router's network and any hotspot the laptop shares."""
+    return [
+        {
+            "interface": interface,
+            "kind": "hotspot" if address.startswith(HOTSPOT_PREFIX) else "network",
+            "url": phone_url(request, address),
+        }
+        for interface, address in lan_addresses()
+    ]
 
 
 def current_step(state: IngestState, streaming: bool) -> int:
@@ -54,6 +69,7 @@ def devices_page(request: Request) -> HTMLResponse:
     context = {
         "page": "devices",
         "title": "Devices",
+        "networks": networks(request),
         "phone_url": phone_url(request),
         "laptop": socket.gethostname(),
         "lan_enabled": settings.ingest_host not in ("127.0.0.1", "localhost", ""),

@@ -6,7 +6,7 @@ import re
 
 from fastapi.testclient import TestClient
 
-from basir.api.lan import lan_address
+from basir.api.lan import lan_address, lan_addresses
 
 
 def test_page_shows_the_qr_link_and_step_one(client: TestClient) -> None:
@@ -35,3 +35,10 @@ def test_pair_rejects_bad_device_ids(client: TestClient) -> None:
 
 def test_lan_address_is_an_ipv4_address() -> None:
     assert re.fullmatch(r"\d+\.\d+\.\d+\.\d+", lan_address())
+
+
+def test_lan_addresses_skip_virtual_interfaces() -> None:
+    found = lan_addresses()
+    assert all(not name.startswith(("lo", "docker", "br-", "veth")) for name, _ in found)
+    if found and lan_address() in {ip for _, ip in found}:
+        assert found[0][1] == lan_address()  # the outbound address comes first
