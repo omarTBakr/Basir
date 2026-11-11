@@ -49,7 +49,7 @@ The stage built today is **Phase 0, the foundation**: replay a recorded RGB-D sc
 
 Phase 0 is done when a real recorded room comes out as **one clean point cloud**, and the numbers agree with what you see. The check runs on the [TUM RGB-D benchmark](https://cvg.cit.tum.de/data/datasets/rgbd-dataset), which has ground-truth camera poses from a motion-capture system. If the cloud looks wrong, the bug is in Basir's geometry, not in the tracking.
 
-One `visualize_pointcloud.py` run does the following, as defined in [`scripts/visualize_pointcloud.py`](scripts/visualize_pointcloud.py):
+One `visualize_pointcloud.py` run does the following, as defined in [`scripts/visualize_pointcloud.py`](scripts/visualize_pointcloud.py) and [`basir/spatial/fusion.py`](basir/spatial/fusion.py):
 
 1. **Load.** [`TUMDatasetSource`](basir/ingest/sources/tum.py) reads every Nth frame: RGB, depth in metres and the pose `T_world_cam`. The camera intrinsics come from the dataset's own calibration (freiburg1 / 2 / 3), not a generic default.
 2. **Lift to 3D.** [`frame_to_world_points`](basir/core/geometry.py) back-projects each depth pixel and moves it into the world frame with the frame's pose.
@@ -69,6 +69,41 @@ flowchart LR
 ```
 
 **Pass criteria:** the cloud of `fr1/room` shows walls, desk and floor sharp, with no doubled or ghost surfaces, and the red trajectory follows the walk. On the numbers side, the median consistency residual is **≤ 3 cm** and **≥ 80 %** of points are within 5 cm.
+
+## Pipelines
+
+The whole Phase 0 check also runs as one **Temporal workflow**, `Phase0Pipeline` ([`basir/pipelines/phase0.py`](basir/pipelines/phase0.py)). Its steps form a DAG: each step is a Temporal activity ([`phase0_steps.py`](basir/pipelines/phase0_steps.py)) that starts as soon as the steps it depends on have finished, so the two datasets are prepared and fused in parallel. The `gate` passes only if every point cloud meets the Phase 0 targets; otherwise the workflow fails, naming each cloud and number that missed.
+
+```mermaid
+flowchart LR
+    check_env["check_env"]
+    prepare_desk["prepare_dataset fr1/desk"]
+    prepare_room["prepare_dataset fr1/room"]
+    replay_desk["replay fr1/desk"]
+    cloud_desk["pointcloud fr1/desk"]
+    cloud_room["pointcloud fr1/room"]
+    gate{"gate<br/>median ≤ 3 cm, ≥ 80% within 5 cm"}
+    check_env --> prepare_desk & prepare_room
+    prepare_desk --> replay_desk & cloud_desk
+    prepare_room --> cloud_room
+    replay_desk & cloud_desk & cloud_room --> gate
+```
+
+```bash
+temporal server start-dev                         # or the Docker Compose stack; Temporal on 127.0.0.1:7233
+uv run python scripts/worker.py                   # worker on task queue basir-pipelines (keep it running)
+uv run python scripts/run_pipeline.py phase0 --wait                    # fr1/desk + fr1/room
+uv run python scripts/run_pipeline.py phase0 --datasets fr1/desk --every 10
+```
+
+`run_pipeline.py` prints the workflow ID, its page in the **Temporal UI** (`http://127.0.0.1:8233`: the step timeline, inputs, results, retries) and the **MLflow** parent run. A missing dataset is downloaded by its `prepare_dataset` step. Payloads carry only paths and numbers; clouds and images stay on disk and in MLflow.
+
+In MLflow (experiment `phase0-pipeline`) each pipeline run is one parent run with one nested child run per step:
+
+| Run | Tags | Artifacts |
+|---|---|---|
+| parent | `basir.pipeline` (`phase0`), `basir.workflow_id`, `basir.status` (`running` → `succeeded` / `failed`) | `dag.json` (`{"nodes": [{"id", "activity", "dataset"}], "edges": [{"source", "target"}]}`), `dag.mmd` (Mermaid) |
+| child (per step) | `mlflow.parentRunId`, `basir.step` (e.g. `pointcloud:fr1/room`), `basir.depends_on` (comma-separated step names), `basir.status`, `basir.dataset` | what the step produces, e.g. the `.ply`, top-down image and trajectory of a `pointcloud` step |
 
 ## Quickstart
 
@@ -113,6 +148,7 @@ Notes:
 | `DATA_DIR` | Root for `datasets/`, `outputs/`, `mlflow.db` and `mlartifacts/` (default: the project folder) |
 | `MLFLOW_TRACKING_URI` | Where runs are recorded: `http://127.0.0.1:5000` for the [local stack](#local-stack) (default: `sqlite:///<DATA_DIR>/mlflow.db`) |
 | `PROMETHEUS_URL` | Prometheus of the local stack (default: `http://127.0.0.1:9090`) |
+| `TEMPORAL_ADDRESS` | Temporal frontend that the pipeline worker and `run_pipeline.py` connect to (default: `127.0.0.1:7233`) |
 | `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY`, `LANGFUSE_BASE_URL` | Runtime tracing; off until both keys are set (default URL: Langfuse Cloud) |
 
 The default camera (TUM / Kinect v1 intrinsics) is a read-only property on `Settings`, used when a dataset has no calibration of its own.
@@ -285,6 +321,7 @@ flowchart LR
 | Tool | Answers | Records | Where |
 |---|---|---|---|
 | **MLflow** | "Did this change make Basir better?" | One run per script or evaluation: params, metrics, artifacts, git commit, GPU | The stack's MLflow server on Postgres, or local SQLite (`mlflow.db`); artifacts in `mlartifacts/` either way |
+| **Temporal** | "Where is this pipeline, and what failed?" | One workflow per pipeline run: each step's inputs, result, retries and timing | `temporal server start-dev` or the Docker stack, UI on port 8233 |
 | **Langfuse** | "What happened in this one request?" | One trace per query: each step, LLM / VLM calls, latency and cost | Langfuse Cloud for now; self-hosting later |
 | **Prometheus + Grafana** | "Is the machine keeping up?" | Host, GPU, Postgres, Temporal and Basir server metrics over time | The [local stack](#local-stack) |
 
@@ -325,11 +362,18 @@ Basir/
 │   │   │   ├── base.py             # FrameSource interface
 │   │   │   └── tum.py              # TUMDatasetSource
 │   │   └── playback.py             # real-time pacing and playback statistics
-│   └── spatial/
-│       └── pointcloud.py           # fused cloud, consistency score, top-down image
+│   ├── spatial/
+│   │   ├── pointcloud.py           # fused cloud, consistency score, top-down image
+│   │   └── fusion.py               # the Phase 0 check: fuse, score against the targets, save outputs
+│   └── pipelines/
+│       ├── dag.py                  # steps + dependencies, as dag.json / Mermaid
+│       ├── phase0.py               # Phase0Pipeline Temporal workflow and its DAG
+│       ├── phase0_steps.py         # its activities, each logged as a nested MLflow run
+│       └── runtime.py              # Temporal client, worker, task queue, UI links
 ├── utilities/
 │   ├── config.py                   # Settings (.env + environment)
-│   ├── experiment.py               # MLflow run tracking
+│   ├── environment.py              # installed package versions
+│   ├── experiment.py               # MLflow run tracking (incl. parent / nested runs)
 │   ├── tracing.py                  # Langfuse tracing (no-op without keys)
 │   └── utility.py                  # URLs, hashing, archives, downloads, PNG, .env parsing
 ├── scripts/                        # command line only
@@ -337,6 +381,8 @@ Basir/
 │   ├── check_env.py                # versions, CUDA, paths, Langfuse smoke trace
 │   ├── replay.py                   # real-time RGB-D playback window
 │   ├── visualize_pointcloud.py     # the Phase 0 check
+│   ├── worker.py                   # Temporal worker for the pipelines
+│   ├── run_pipeline.py             # start a pipeline (phase0) and print its links
 │   └── stack.sh                    # local stack: up / down / status / logs
 ├── infra/                          # configs for docker-compose.yml
 │   ├── stack.env.example           # stack passwords and ports (copied to stack.env, git-ignored)

@@ -25,7 +25,7 @@ import numpy as np
 
 from basir.core.types import Frame
 from basir.ingest.datasets.prepare import dataset_dir
-from basir.ingest.playback import Pacer, PlaybackStats
+from basir.ingest.playback import Pacer, PlaybackStats, play
 from basir.ingest.sources.tum import TUMDatasetSource
 from utilities.experiment import log_metrics, log_params, start_run
 
@@ -56,13 +56,8 @@ def render(frame: Frame) -> np.ndarray:
 
 def replay(source: TUMDatasetSource, speed: float = 1.0, show: bool = True) -> PlaybackStats:
     """Play every frame at its recorded pace (scaled by `speed`), optionally in a window."""
-    pacer, stats = Pacer(speed), PlaybackStats()
-    for frame in source:
-        pacer.wait(frame.timestamp)
-        stats.add(frame)
-        if show and not _show(frame, pacer):
-            break
-    stats.wall_seconds = pacer.elapsed
+    pacer = Pacer(speed)
+    stats = play(source, pacer, on_frame=(lambda frame: _show(frame, pacer)) if show else None)
     if show:
         cv2.destroyAllWindows()
     return stats
@@ -108,14 +103,7 @@ def main(argv: list[str] | None = None) -> int:
             }
         )
         stats = replay(source, speed=args.speed, show=not args.no_window)
-        log_metrics(
-            {
-                "frames": stats.frames,
-                "fps": stats.fps,
-                "depth_valid_pct": stats.depth_valid_pct,
-                "wall_seconds": stats.wall_seconds,
-            }
-        )
+        log_metrics(stats.metrics())
 
     print(
         f"Replayed {stats.frames} frames from {root.name} in {stats.wall_seconds:.1f} s "

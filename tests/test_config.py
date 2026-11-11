@@ -147,3 +147,9 @@ def test_observability_defaults(tmp_path: Path, clean_env: pytest.MonkeyPatch) -
 def test_langfuse_needs_both_keys(tmp_path: Path, clean_env: pytest.MonkeyPatch) -> None:
     assert not Settings(_env_file=tmp_path / "e.env", langfuse_public_key="pk").langfuse_enabled
     assert Settings(_env_file=tmp_path / "e.env", langfuse_public_key="pk", langfuse_secret_key="sk").langfuse_enabled
+
+
+def test_temporal_address_default_and_override(tmp_path: Path, clean_env: pytest.MonkeyPatch) -> None:
+    assert Settings(_env_file=tmp_path / "e.env").temporal_address == "127.0.0.1:7233"
+    clean_env.setenv("BASIR_TEMPORAL_ADDRESS", "temporal:7233")
+    assert Settings(_env_file=tmp_path / "e.env").temporal_address == "temporal:7233"
