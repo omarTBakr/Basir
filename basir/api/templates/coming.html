@@ -1,0 +1,9 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card later-card">
+  <span class="badge">Phase {{ tab.phase }}</span>
+  <h2>{{ tab.title }}</h2>
+  <p class="muted">{{ tab.summary }}</p>
+  <p class="muted">This tab is planned. It is switched on in <code>basir/api/tabs.py</code> when Phase {{ tab.phase }} lands.</p>
+</div>
+{% endblock %}

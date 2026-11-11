@@ -126,6 +126,6 @@ http://127.0.0.1:3000/d-solo/<uid>/?orgId=1&panelId=<id>&kiosk&theme=light
 | GPU | `basir-gpu` | 1 utilization · 2 memory · 3 temperature · 4 power · 5 utilization over time · 6 memory · 7 temperature · 8 power vs limit · 9 clocks |
 | Postgres | `basir-postgres` | 1 up · 2 connections · 3 `mlflow` size · 4 `temporal` size · 5 connections by database · 6 by state · 7 database size · 8 transactions · 9 rows written · 10 cache hit ratio |
 | Temporal | `basir-temporal` | 1 frontend requests/s · 2 workflows completed (1 h) · 3 failed (1 h) · 4 errors/s · 5 workflow outcomes · 6 activity task calls · 7 workflow calls · 8 frontend latency p95 · 9 activity call latency p95 · 10 persistence latency p95 |
-| Basir server | `basir-server` | 1 up · 2 WebSocket connections · 3 frames/s · 4 dropped % · 5 queue depth · 6 inference p95 · 7 frames · 8 queue depth and connections · 9 inference latency p50/p95/p99 · 10 batch size · 11 HTTP requests |
+| Basir server | `basir-server` | 1 up · 2 WebSocket connections · 3 frames/s · 4 dropped % · 5 queue depth · 6 inference p95 · 7 frames · 8 queue depth and connections · 9 inference latency p50/p95/p99 · 10 batch size · 11 HTTP requests · 12 live map voxels · 13 keyframes fused · 14 map update latency · 15 browser viewers |
 
 The Basir server dashboard reads the `basir_*` metrics listed in [Server and UI](09-server-and-ui.md#metrics). Which panels the server's Dashboards page embeds is set in one place, [`basir/api/grafana.py`](../basir/api/grafana.py); keep it in step when a panel id changes.

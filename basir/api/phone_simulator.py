@@ -1,18 +1,20 @@
 """Simulated phones: replay recorded frames to the server over `/ws/stream/{device_id}`, like ARCore would.
 
-Each phone sends JPEG + header messages at a fixed rate and records what comes back:
-round-trip time measured on the phone, the server's own latency, batch sizes and drops.
+Each phone sends header + JPEG + uint16 depth messages (protocol v2) at a fixed rate and records
+what comes back: round-trip time measured on the phone, the server's own latency, batch sizes
+and drops. Depth is sent in millimetres at ARCore's resolution (160 x 120) by default.
 """
 
 from __future__ import annotations
 
 import asyncio
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 import json
 import statistics
 import time
 
 import cv2
+import numpy as np
 from websockets.asyncio.client import ClientConnection, connect
 from websockets.exceptions import ConnectionClosed
 
@@ -20,12 +22,15 @@ from basir.api.protocol import FrameHeader, encode_frame
 from basir.ingest.sources.base import FrameSource
 
 JPEG_QUALITY = 80
+DEPTH_SCALE = 0.001  # metres per unit: millimetres, like ARCore DEPTH16
+ARCORE_DEPTH_WIDTH = 160
 
 
 @dataclass(frozen=True)
 class RecordedFrame:
     header: FrameHeader
     jpeg: bytes
+    depth: bytes | None = None
 
 
 @dataclass
@@ -55,8 +60,21 @@ class PhoneStats:
         )
 
 
-def record(source: FrameSource, max_frames: int | None = None) -> list[RecordedFrame]:
-    """Encode a source's frames as they would leave a phone: JPEG colour, pose and intrinsics."""
+def _depth_mm(depth_m: np.ndarray, width: int | None) -> np.ndarray:
+    """Metres -> uint16 millimetres, optionally resized (nearest, so no invented depths) to `width`."""
+    if width and width < depth_m.shape[1]:
+        height = round(depth_m.shape[0] * width / depth_m.shape[1])
+        depth_m = cv2.resize(depth_m, (width, height), interpolation=cv2.INTER_NEAREST)
+    return np.clip(depth_m / DEPTH_SCALE, 0, 65535).astype("<u2")
+
+
+def record(
+    source: FrameSource, max_frames: int | None = None, depth_width: int | None = ARCORE_DEPTH_WIDTH
+) -> list[RecordedFrame]:
+    """Encode a source's frames as they would leave a phone: JPEG colour, depth, pose and intrinsics.
+
+    `depth_width` resizes depth like ARCore's small depth image (None keeps the source size).
+    """
     frames: list[RecordedFrame] = []
     for frame in source:
         ok, jpeg = cv2.imencode(
@@ -65,20 +83,29 @@ def record(source: FrameSource, max_frames: int | None = None) -> list[RecordedF
         if not ok:
             continue
         k = frame.intrinsics
+        depth = _depth_mm(frame.depth, depth_width) if frame.depth is not None else None
         header = FrameHeader(
             seq=len(frames),
             timestamp=frame.timestamp,
             pose=frame.pose.matrix.flatten().tolist() if frame.pose is not None else None,
             intrinsics={"fx": k.fx, "fy": k.fy, "cx": k.cx, "cy": k.cy, "width": k.width, "height": k.height},
+            depth={"width": depth.shape[1], "height": depth.shape[0], "scale": DEPTH_SCALE}
+            if depth is not None
+            else None,
         )
-        frames.append(RecordedFrame(header, jpeg.tobytes()))
+        frames.append(RecordedFrame(header, jpeg.tobytes(), depth.tobytes() if depth is not None else None))
         if max_frames is not None and len(frames) >= max_frames:
             break
     return frames
 
 
 async def run_phone(
-    base_url: str, device: str, frames: list[RecordedFrame], fps: float, duration: float, delay: float = 0.0
+    base_url: str,
+    device: str,
+    frames: list[RecordedFrame],
+    fps: float,
+    duration: float,
+    delay: float = 0.0,
 ) -> PhoneStats:
     """Stream `frames` (looping) at `fps` for `duration` seconds; fps <= 0 sends as fast as possible."""
     stats = PhoneStats(device)
@@ -90,9 +117,9 @@ async def run_phone(
         seq = 0
         while (elapsed := time.perf_counter() - start) < duration:
             recorded = frames[seq % len(frames)]
-            header = FrameHeader(seq, recorded.header.timestamp, recorded.header.pose, recorded.header.intrinsics)
+            header = replace(recorded.header, seq=seq)
             sent_at[seq] = time.perf_counter()
-            await ws.send(encode_frame(header, recorded.jpeg))
+            await ws.send(encode_frame(header, recorded.jpeg, recorded.depth))
             stats.sent += 1
             seq += 1
             await asyncio.sleep(max(0.0, seq / fps - elapsed) if fps > 0 else 0)

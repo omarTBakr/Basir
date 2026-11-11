@@ -26,7 +26,7 @@ The deployment is a **phone + laptop** split. An Android phone running **ARCore*
 
 ## Status
 
-The stage built today is **Phase 0, the foundation**: replay a recorded RGB-D scene, turn depth and camera poses into a correct 3D point cloud, and *measure* that it's correct. Every direction Basir gives later depends on this geometry. Around it sit the tools every later phase uses: DVC-versioned data, MLflow runs, a Temporal pipeline, a monitoring stack, and a server that already takes frames from several phones at once.
+The stage built today is **Phase 0, the foundation**: replay a recorded RGB-D scene, turn depth and camera poses into a correct 3D point cloud, and *measure* that it's correct. Every direction Basir gives later depends on this geometry. Around it sit the tools every later phase uses: DVC-versioned data, MLflow runs, a Temporal pipeline, a monitoring stack, and the **Basir Console**: one web app that pairs a phone over Wi-Fi with a QR code (no app to install), shows its colour and depth live, grows a 3D map as the phone walks, and brings MLflow, Temporal and Grafana under one sidebar.
 
 | Phase 0 check (TUM RGB-D) | Median residual | Within 5 cm | Target |
 |---|---|---|---|
@@ -49,8 +49,7 @@ scripts/stack.sh up                                    # MLflow, Temporal, Prome
 uv run python scripts/worker.py                        # in a second terminal: the pipeline worker
 uv run python scripts/run_pipeline.py phase0 --wait    # the whole check as a Temporal workflow, both rooms
 
-uv run python scripts/serve.py                         # server and UI on http://127.0.0.1:8000
-uv run python scripts/simulate_phones.py 2             # two simulated phones streaming fr1/desk
+uv run python scripts/serve.py                         # the Console on http://127.0.0.1:8000; then Devices → scan the QR with the phone
 ```
 
 **Prerequisites:** Linux, [uv](https://docs.astral.sh/uv/) (it installs Python 3.12), an NVIDIA GPU with a recent driver, and Docker Engine for the stack. Developed on an RTX 4060 Laptop (8 GB).
@@ -69,7 +68,7 @@ Everything else is in [`docs/`](docs/README.md), one page per feature:
 | [Experiment tracking and tracing](docs/06-experiment-tracking.md) | MLflow runs and tags, Langfuse |
 | [Pipelines](docs/07-pipelines.md) | The Temporal `Phase0Pipeline` and its DAG |
 | [Local stack](docs/08-local-stack.md) | Docker Compose services, ports, Grafana dashboards |
-| [Server and UI](docs/09-server-and-ui.md) | Multi-phone WebSocket ingest, GPU worker, metrics, web UI |
+| [Server and UI](docs/09-server-and-ui.md) | The Console: tabs, live colour + depth, live 3D map, phone pairing over Wi-Fi, multi-phone ingest, GPU worker, metrics |
 | [Async processing](docs/10-async-processing.md) | asyncio for frames, Temporal for pipelines, no Celery |
 | [Testing and code quality](docs/11-testing.md) | pytest, ruff, mypy, CI |
 | [Architecture and project structure](docs/12-architecture.md) | Module map, design rules, file tree |

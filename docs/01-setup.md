@@ -58,8 +58,15 @@ Only what the built phases use is configurable. Each later phase adds its own se
 | `INGEST_QUEUE_SIZE` | `2` | Frames kept per phone before the oldest is dropped (≥ 1) |
 | `BATCH_MAX_SIZE` | `8` | Most frames per GPU micro-batch (≥ 1) |
 | `BATCH_MAX_WAIT_MS` | `20` | Longest wait after a batch's first frame before it's sent (≥ 0) |
+| `INGEST_HOST`, `INGEST_PORT` | `0.0.0.0`, `8001` | The phone-only listener (phone page, pairing, stream); the Console stays on `127.0.0.1:8000` |
+| `INGEST_TLS` | `true` | HTTPS with a self-signed certificate on the phone listener (phone browsers need it for the camera and AR) |
+| `MLFLOW_EMBED_PORT`, `TEMPORAL_EMBED_PORT` | `8002`, `8003` | Loopback ports that serve frameable copies of the MLflow and Temporal UIs |
+| `VIEW_MAX_FPS` | `15` | Most frames per second sent to a Live view |
+| `MAP_VOXEL_M` | `0.02` | Live map voxel size in metres |
+| `MAP_KEYFRAME_M`, `MAP_KEYFRAME_DEG` | `0.05`, `5` | A frame is fused into the live map after the camera moved this far or turned this much |
+| `MAP_MAX_POINTS` | `2000000` | Most voxels per live map |
 
-Derived values are read-only properties on `Settings`, not settings: `datasets_dir`, `outputs_dir`, `mlflow_uri`, `mlflow_artifacts_dir`, `mlflow_ui_url`, `langfuse_enabled`, `effective_device` (with `auto` resolved) and `default_camera_intrinsics` (the TUM / Kinect v1 camera, used when a dataset has no calibration of its own; see [Geometry](02-geometry.md#camera-intrinsics)).
+Derived values are read-only properties on `Settings`, not settings: `datasets_dir`, `outputs_dir`, `mlflow_uri`, `mlflow_artifacts_dir`, `mlflow_ui_url`, `devices_file`, `certs_dir`, `live_map_dir`, `langfuse_enabled`, `effective_device` (with `auto` resolved) and `default_camera_intrinsics` (the TUM / Kinect v1 camera, used when a dataset has no calibration of its own; see [Geometry](02-geometry.md#camera-intrinsics)).
 
 ## Stack settings
 

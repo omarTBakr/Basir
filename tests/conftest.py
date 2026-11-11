@@ -12,6 +12,7 @@ import socket
 import threading
 import time
 
+from fastapi import FastAPI
 from fastapi.testclient import TestClient
 import pytest
 import uvicorn
@@ -186,4 +187,43 @@ def live_server(tmp_path: Path, clean_env: pytest.MonkeyPatch, backend: FakeBack
         yield f"ws://127.0.0.1:{port}"
     finally:
         server.should_exit = True
+        thread.join(timeout=10)
+
+
+@dataclass
+class LanServer:
+    """The Console and the phone-only listener in one event loop, as `scripts/serve.py` runs them."""
+
+    console: FastAPI
+    console_url: str  # http://127.0.0.1:<port>
+    phone_url: str  # http://127.0.0.1:<port> (no TLS in tests)
+
+
+@pytest.fixture
+def lan_server(tmp_path: Path, clean_env: pytest.MonkeyPatch, backend: FakeBackend) -> Iterator[LanServer]:
+    from basir.api.ingest import create_ingest_app
+    from scripts.serve import serve
+
+    console = create_app(server_settings(tmp_path), backend)
+    ports = []
+    for _ in range(2):
+        with socket.socket() as probe:
+            probe.bind(("127.0.0.1", 0))
+            ports.append(probe.getsockname()[1])
+    servers = [
+        uvicorn.Server(uvicorn.Config(console, port=ports[0], log_level="warning")),
+        uvicorn.Server(uvicorn.Config(create_ingest_app(console), port=ports[1], log_level="warning")),
+    ]
+    thread = threading.Thread(target=lambda: asyncio.run(serve(servers)), daemon=True)
+    thread.start()
+    deadline = time.monotonic() + 30
+    while not all(s.started for s in servers):
+        if time.monotonic() > deadline:
+            raise RuntimeError("test servers did not start")
+        time.sleep(0.05)
+    try:
+        yield LanServer(console, f"http://127.0.0.1:{ports[0]}", f"http://127.0.0.1:{ports[1]}")
+    finally:
+        for s in servers:
+            s.should_exit = True
         thread.join(timeout=10)

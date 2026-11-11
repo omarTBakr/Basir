@@ -22,6 +22,10 @@ QUEUE_DEPTH = Gauge("basir_queue_depth", "Frames waiting for inference", ["devic
 BATCH_SIZE = Histogram("basir_batch_size", "Frames per GPU batch", buckets=(1, 2, 3, 4, 6, 8, 12, 16, 24, 32))
 INFERENCE_SECONDS = Histogram("basir_inference_seconds", "GPU worker time per batch", buckets=_LATENCY_BUCKETS)
 FRAME_LATENCY = Histogram("basir_frame_latency_seconds", "Frame receipt to result sent", buckets=_LATENCY_BUCKETS)
+VIEWERS = Gauge("basir_viewers", "Browser sockets watching a phone or its map", ["kind"])
+MAP_VOXELS = Gauge("basir_map_voxels", "Voxels in a phone's live map", ["device"])
+KEYFRAMES_FUSED = Counter("basir_keyframes_fused", "Keyframes fused into the live map", ["device"])
+MAP_UPDATE_SECONDS = Histogram("basir_map_update_seconds", "Time to fuse one keyframe", buckets=_LATENCY_BUCKETS)
 
 router = APIRouter()
 

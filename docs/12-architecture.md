@@ -14,9 +14,9 @@ flowchart TB
     datasets["ingest/datasets/<br/>presets · layout · toy · prepare · tum_format"]
     sources["ingest/sources/<br/>FrameSource · TUMDatasetSource"]
     playback["ingest/playback<br/>Pacer · PlaybackStats"]
-    spatial["spatial/<br/>pointcloud · fusion"]
+    spatial["spatial/<br/>pointcloud · fusion · live_map"]
     pipelines["pipelines/<br/>dag · phase0 · phase0_steps · runtime"]
-    api["api/<br/>ingest · framebus · batcher · worker<br/>metrics · mlflow_view · temporal_view · ui"]
+    api["api/<br/>ingest · framebus · batcher · worker · tokens<br/>viewer · mapping · embed · tabs<br/>metrics · mlflow_view · temporal_view · ui"]
   end
   subgraph shared["utilities/"]
     config["config<br/>Settings"]
@@ -42,7 +42,7 @@ flowchart TB
 - **One job per module.** Dataset preparation is split into the catalogue (`presets`), the index files (`layout`), the synthetic test data (`toy`), the file formats (`tum_format`) and the download pipeline (`prepare`). Playback pacing is separate from any display, and map building (`spatial/pointcloud`) is separate from the viewer.
 - **Frame sources are interchangeable.** Anything that yields `Frame`s satisfies [`FrameSource`](../basir/ingest/sources/base.py): the TUM dataset today, phone recordings and the live ARCore stream later.
 - **Geometry has no I/O.** [`basir/core`](../basir/core/types.py) depends on numpy only, so it's fast to test and safe to reuse in every phase.
-- **The server is one process plus one GPU worker.** [`basir/api`](../basir/api/__init__.py) holds the FastAPI app: phone ingest, micro-batching, the spawned GPU worker, Prometheus metrics and the UI ([Server and UI](09-server-and-ui.md)).
+- **The server is one process plus one GPU worker.** [`basir/api`](../basir/api/__init__.py) holds the FastAPI app (the Console): phone ingest with per-phone tokens on a LAN-only listener, micro-batching, the spawned GPU worker, the live colour + depth view, the live 3D map, Prometheus metrics and the tabbed UI ([Server and UI](09-server-and-ui.md)).
 - **Pipelines keep I/O in activities.** Workflow code stays deterministic; activities do the work and the logging ([Pipelines](07-pipelines.md)).
 - **Scripts never import MLflow or Langfuse directly.** They go through [`utilities/experiment.py`](../utilities/experiment.py) and [`utilities/tracing.py`](../utilities/tracing.py). Logging failures produce one warning and never stop a run.
 - **`utilities/` is generic, `basir/` is the domain.** Settings, run tracking, tracing and helpers (URLs, hashing, archives, downloads, PNG writing, `.env` parsing) know nothing about Basir's domain.
@@ -68,13 +68,14 @@ Basir/
 │   │   └── playback.py             # real-time pacing and playback statistics
 │   ├── spatial/
 │   │   ├── pointcloud.py           # fused cloud, consistency score, top-down image
-│   │   └── fusion.py               # the Phase 0 check: fuse, score against the targets, save outputs
+│   │   ├── fusion.py               # the Phase 0 check: fuse, score against the targets, save outputs
+│   │   └── live_map.py             # keyframe gate + incremental voxel map for the live 3D map
 │   ├── pipelines/
 │   │   ├── dag.py                  # steps + dependencies, as dag.json / Mermaid
 │   │   ├── phase0.py               # Phase0Pipeline Temporal workflow and its DAG
 │   │   ├── phase0_steps.py         # its activities, each logged as a nested MLflow run
 │   │   └── runtime.py              # Temporal client, worker, task queue, UI links
-│   └── api/                        # the server: phone ingest, GPU worker, metrics, web UI
+│   └── api/                        # the Console: phone ingest, GPU worker, live view and map, metrics, web UI
 │       ├── app.py                  # app factory; lifespan starts the GPU worker and batcher
 │       ├── protocol.py             # wire format: JPEG + JSON header in, JSON result out
 │       ├── framebus.py             # per-phone latest-frame-wins queues (FrameBus interface)

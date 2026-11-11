@@ -61,6 +61,18 @@ class Settings(BaseModel):
     batch_max_size: int = Field(default=8, ge=1, description="Most frames per GPU batch")
     batch_max_wait_ms: float = Field(default=20.0, ge=0, description="Longest wait to fill a batch")
 
+    # Console: the phone listener on the LAN, the live view and the live map
+    ingest_host: str = Field(default="0.0.0.0", description="Interface of the phone-only listener (LAN)")
+    ingest_port: int = Field(default=8001, description="Port of the phone-only listener")
+    ingest_tls: bool = Field(default=True, description="HTTPS on the phone listener (phone browsers need it)")
+    mlflow_embed_port: int = Field(default=8002, description="Loopback port that frames the MLflow UI")
+    temporal_embed_port: int = Field(default=8003, description="Loopback port that frames the Temporal UI")
+    view_max_fps: float = Field(default=15.0, gt=0, description="Most frames/s sent to a Live view")
+    map_voxel_m: float = Field(default=0.02, gt=0, description="Live map voxel size in metres")
+    map_keyframe_m: float = Field(default=0.05, ge=0, description="Move this far to fuse a new keyframe")
+    map_keyframe_deg: float = Field(default=5.0, ge=0, description="Or turn this many degrees")
+    map_max_points: int = Field(default=2_000_000, ge=1, description="Voxels kept per live map")
+
     def __init__(self, _env_file: Path | str | None = None, **values: Any):
         """Load settings. An explicit `_env_file` is used on its own: if it does not
         exist, no env file is read (it never falls back to the project's env/.env)."""
@@ -119,6 +131,21 @@ class Settings(BaseModel):
     @property
     def mlflow_artifacts_dir(self) -> Path:
         return self.base_data_dir / "mlartifacts"
+
+    @property
+    def devices_file(self) -> Path:
+        """Hashed per-phone tokens (git-ignored)."""
+        return self.base_data_dir / "devices.json"
+
+    @property
+    def certs_dir(self) -> Path:
+        """The phone listener's self-signed certificate (git-ignored)."""
+        return self.base_data_dir / "certs"
+
+    @property
+    def live_map_dir(self) -> Path:
+        """Saved live maps (.ply + trajectory)."""
+        return self.outputs_dir / "live_map"
 
     @property
     def mlflow_ui_url(self) -> str | None:

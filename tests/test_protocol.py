@@ -16,13 +16,27 @@ def test_round_trip_with_pose_and_intrinsics() -> None:
     pose = [float(i) for i in range(16)]
     intrinsics = {"fx": 525.0, "fy": 525.0, "cx": 319.5, "cy": 239.5, "width": 640.0, "height": 480.0}
     header = FrameHeader(seq=7, timestamp=1305031453.25, pose=pose, intrinsics=intrinsics)
-    decoded, jpeg = decode_frame(encode_frame(header, JPEG))
-    assert decoded == header and jpeg == JPEG
+    decoded, jpeg, depth = decode_frame(encode_frame(header, JPEG))
+    assert decoded == header and jpeg == JPEG and depth is None
 
 
 def test_minimal_header() -> None:
-    header, jpeg = decode_frame(encode_frame(FrameHeader(seq=0, timestamp=1.5), JPEG))
-    assert header.pose is None and header.intrinsics is None and jpeg == JPEG
+    header, jpeg, depth = decode_frame(encode_frame(FrameHeader(seq=0, timestamp=1.5), JPEG))
+    assert header.pose is None and header.intrinsics is None and header.depth is None
+    assert jpeg == JPEG and depth is None
+
+
+def test_round_trip_with_depth() -> None:
+    depth = bytes(range(24))  # 4 x 3 uint16 values
+    header = FrameHeader(seq=1, timestamp=2.0, depth={"width": 4.0, "height": 3.0, "scale": 0.001})
+    decoded, jpeg, raw = decode_frame(encode_frame(header, JPEG, depth))
+    assert decoded.jpeg_bytes == len(JPEG) and decoded.depth == header.depth
+    assert jpeg == JPEG and raw == depth
+
+
+def test_depth_without_header_metadata_is_refused() -> None:
+    with pytest.raises(ProtocolError):
+        encode_frame(FrameHeader(seq=1, timestamp=2.0), JPEG, b"\x00\x00")
 
 
 def _raw(header: object) -> bytes:
@@ -40,6 +54,9 @@ def _raw(header: object) -> bytes:
         _raw({"timestamp": 1.0}),  # no seq
         _raw({"seq": 1, "timestamp": 1.0, "pose": [1, 2, 3]}),  # pose not 4x4
         _raw({"seq": 1, "timestamp": 1.0, "intrinsics": {"fx": 1}}),  # intrinsics incomplete
+        _raw({"seq": 1, "timestamp": 1.0, "depth": {"width": 2}}),  # depth incomplete
+        _raw({"seq": 1, "timestamp": 1.0, "depth": {"width": 2, "height": 2, "scale": 1}}),  # no jpeg_bytes
+        _raw({"seq": 1, "timestamp": 1.0, "depth": {"width": 64, "height": 64, "scale": 1}, "jpeg_bytes": 1}),
     ],
 )
 def test_malformed_messages_are_rejected(message: bytes) -> None:

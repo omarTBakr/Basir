@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#121417">
+  <title>Basir phone</title>
+  <style>
+    :root { --bg: #121417; --surface: #1b1e22; --text: #e6e7e8; --muted: #9aa0a6; --border: #2e3237; --accent: #60a5fa; --ok: #4ade80; --bad: #fb923c; }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+    main { max-width: 480px; margin: 0 auto; padding: 24px 18px 40px; }
+    h1 { font-size: 22px; margin: 0 0 4px; }
+    .muted { color: var(--muted); }
+    .card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 16px; margin-top: 16px; }
+    .step { font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--accent); font-weight: 700; }
+    .code { font: 700 52px ui-monospace, monospace; letter-spacing: .2em; text-align: center; margin: 12px 0; color: var(--accent); }
+    button { width: 100%; padding: 14px; margin-top: 12px; border-radius: 10px; border: 1px solid var(--border); background: var(--surface); color: var(--text); font: 600 16px system-ui; }
+    button.primary { background: var(--accent); border-color: var(--accent); color: #0b1220; }
+    button:disabled { opacity: .45; }
+    .stats { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 12px; font-variant-numeric: tabular-nums; }
+    .stats div { background: var(--bg); border-radius: 8px; padding: 8px 10px; }
+    .stats b { display: block; font-size: 20px; }
+    .bad { color: var(--bad); }
+    .ok { color: var(--ok); }
+    video { width: 100%; border-radius: 10px; margin-top: 12px; background: #000; }
+    #overlay { position: fixed; inset: auto 0 0 0; padding: 12px 14px calc(12px + env(safe-area-inset-bottom)); background: rgba(18,20,23,.82); color: var(--text); font: 14px system-ui; }
+    #overlay button { margin-top: 8px; padding: 10px; }
+    [hidden] { display: none !important; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Basir</h1>
+    <div class="muted" id="who"></div>
+
+    <section class="card" id="s-connecting">
+      <div class="step">Connecting</div>
+      <p>Talking to the laptop…</p>
+    </section>
+
+    <section class="card" id="s-pairing" hidden>
+      <div class="step">Step 1 of 2 · approve this phone</div>
+      <p>On the laptop, open <b>Devices</b> and press <b>Approve</b> next to this code:</p>
+      <div class="code" id="code">····</div>
+      <p class="muted">This screen moves on by itself once you approve.</p>
+    </section>
+
+    <section class="card" id="s-ready" hidden>
+      <div class="step">Step 2 of 2 · start streaming</div>
+      <p id="ready-text">This phone is paired.</p>
+      <button class="primary" id="start-ar" hidden>Start AR stream (colour + depth + position)</button>
+      <button id="start-camera">Start camera stream (colour only)</button>
+      <p class="muted" id="ar-note"></p>
+    </section>
+
+    <section class="card" id="s-streaming" hidden>
+      <div class="step ok">Streaming</div>
+      <p id="mode-text"></p>
+      <div class="stats">
+        <div><span class="muted">Sent</span><b id="fps">0</b>frames/s</div>
+        <div><span class="muted">Laptop latency</span><b id="latency">–</b>ms</div>
+        <div><span class="muted">Frames sent</span><b id="sent">0</b></div>
+        <div><span class="muted">Depth</span><b id="depth">–</b></div>
+      </div>
+      <video id="video" playsinline muted hidden></video>
+      <button id="stop">Stop</button>
+      <p class="muted">Watch it on the laptop: <b>Live</b> shows colour and depth, <b>3D map</b> grows as you walk.</p>
+    </section>
+
+    <section class="card" id="s-error" hidden>
+      <div class="step bad">Problem</div>
+      <p id="error-text"></p>
+      <button id="retry">Try again</button>
+    </section>
+  </main>
+  <div id="overlay" hidden>
+    <div id="overlay-text">Streaming…</div>
+    <button id="overlay-stop">Stop</button>
+  </div>
+  <script src="/phone/phone.js"></script>
+</body>
+</html>

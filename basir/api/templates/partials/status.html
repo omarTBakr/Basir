@@ -1,0 +1,5 @@
+<span title="this server"><span class="dot ok"></span>Server</span>
+{% for c in checks %}
+<span title="{{ c.url }} · {{ c.detail }}"><span class="dot {{ 'ok' if c.up else 'down' }}"></span>{{ c.name }}</span>
+{% endfor %}
+<span title="GPU utilization (Prometheus)"><span class="dot {{ 'ok' if gpu is not none else '' }}"></span>GPU{% if gpu is not none %} {{ gpu | round | int }}%{% endif %}</span>

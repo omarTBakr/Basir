@@ -8,6 +8,7 @@ license-files = ["LICENSE"]
 classifiers = ["Private :: Do Not Upload"]
 requires-python = ">=3.12"
 dependencies = [
+    "cryptography>=50.0.2",
     "fastapi>=0.162.2",
     "httpx>=0.28.1",
     "jinja2>=3.1.6",

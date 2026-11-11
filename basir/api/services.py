@@ -47,3 +47,16 @@ async def scrape_status(prometheus_url: str) -> ServiceStatus:
         f" ({target['lastError']})" if target.get("lastError") else ""
     )
     return ServiceStatus("Prometheus scrape", url, health == "up", detail)
+
+
+async def gpu_utilization(prometheus_url: str) -> float | None:
+    """GPU utilization in percent from the GPU exporter, via Prometheus; None when unknown."""
+    try:
+        async with httpx.AsyncClient(timeout=TIMEOUT_S) as client:
+            response = await client.get(
+                f"{prometheus_url.rstrip('/')}/api/v1/query", params={"query": "100 * nvidia_smi_utilization_gpu_ratio"}
+            )
+        result = response.json()["data"]["result"]
+        return float(result[0]["value"][1]) if result else None
+    except (httpx.HTTPError, ValueError, KeyError, IndexError):
+        return None

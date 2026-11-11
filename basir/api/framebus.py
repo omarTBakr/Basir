@@ -22,6 +22,7 @@ class QueuedFrame:
     header: FrameHeader
     jpeg: bytes
     received_at: float  # time.perf_counter() on receipt
+    depth: bytes | None = None  # uint16 depth described by header.depth (protocol v2)
 
 
 class FrameBus(Protocol):

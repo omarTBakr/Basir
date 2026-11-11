@@ -13,6 +13,8 @@ wheels/
 # env/ holds the settings (.env) and the stack passwords (stack.env); only the *.example files are committed
 /env/.env
 /env/stack.env
+/devices.json
+/certs/
 .env
 
 # Data, models and runtime output (kept on disk, never committed)

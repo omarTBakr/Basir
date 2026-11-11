@@ -38,6 +38,8 @@ PANELS = (
     Panel("basir-server", 9, "Inference latency"),
     Panel("basir-server", 10, "Batch size"),
     Panel("basir-server", 8, "Queue depth and connections"),
+    Panel("basir-server", 12, "Live map voxels"),
+    Panel("basir-server", 14, "Map update latency"),
     Panel("basir-gpu", 5, "GPU utilization"),
     Panel("basir-gpu", 6, "GPU memory"),
     Panel("basir-host", 5, "CPU by mode"),

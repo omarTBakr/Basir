@@ -1,0 +1,101 @@
+{% from "partials/macros.html" import badge %}
+{% macro state(n) -%}{{ "done" if step > n else ("now" if step == n else "later") }}{%- endmacro %}
+<div class="card guide">
+  <strong>Connect a phone</strong>
+  <ol class="guide-steps">
+    <li class="{{ state(1) }}">
+      <div class="title">Open Basir on the phone</div>
+      {% if step == 1 %}
+      <div class="detail">
+        Put the phone on the <b>same Wi-Fi</b> as this laptop and scan the QR code on the right (or type <code>{{ phone_url }}</code> in Chrome on the phone).
+        Chrome warns that the connection is not private: tap <b>Advanced</b>, then <b>Proceed</b>. The laptop's certificate is self-signed; this happens once.
+      </div>
+      <div class="waiting-line"><span class="pulse"></span>Waiting for the phone to open the page…</div>
+      {% endif %}
+    </li>
+    <li class="{{ state(2) }}">
+      <div class="title">Approve the phone</div>
+      {% if step == 2 %}
+      {% if requests %}
+      <div class="detail">The phone shows a 4-digit code. Approve the request with the <b>same code</b>:</div>
+      {% for r in requests %}
+      <div class="request">
+        <div><strong>{{ r.label }}</strong> <span class="muted">({{ r.device }}, {{ r.address }})</span></div>
+        <div class="code" title="The same code is shown on the phone">{{ r.code }}</div>
+        <div class="spacer"></div>
+        <button class="btn primary" hx-post="/api/devices/requests/{{ r.id }}/approve" hx-target="#devices">Approve</button>
+        <button class="btn" hx-post="/api/devices/requests/{{ r.id }}/deny" hx-target="#devices">Deny</button>
+      </div>
+      {% endfor %}
+      {% else %}
+      <div class="waiting-line"><span class="pulse"></span>The phone opened the page; waiting for it to ask to pair…</div>
+      {% endif %}
+      {% endif %}
+    </li>
+    <li class="{{ state(3) }}">
+      <div class="title">Start streaming on the phone</div>
+      {% if step == 3 %}
+      <div class="detail">
+        On the phone, tap <b>Start AR stream</b> (colour, depth and position: needed for the 3D map; allow the camera when asked), or <b>Start camera stream</b> for colour only.
+        The phone remembers this laptop: next time, just open the page and tap Start.
+      </div>
+      <div class="waiting-line"><span class="pulse"></span>Waiting for frames…</div>
+      {% endif %}
+    </li>
+    <li class="{{ state(4) }}">
+      <div class="title">Done</div>
+      {% if step == 4 %}
+      <div class="detail">
+        {{ live.devices | map(attribute="device") | join(", ") }} {{ "is" if live.devices | length == 1 else "are" }} streaming.
+        Open <a href="/live?device={{ live.devices[0].device }}">Live</a> for colour and depth side by side, or
+        <a href="/map?device={{ live.devices[0].device }}">3D map</a> and walk slowly around the room (set <i>World up axis</i> to <b>Y (ARCore)</b>).
+        To add another phone, scan the code with it.
+      </div>
+      {% endif %}
+    </li>
+  </ol>
+</div>
+
+{% if new_token %}
+<div class="card">
+  <p style="margin-top:0"><strong>{{ new_device }}</strong> token (copy it now, it is shown once):</p>
+  <div class="token">{{ new_token }}</div>
+</div>
+{% endif %}
+
+<h2>Connected</h2>
+{% if live.devices %}
+<div class="table-wrap"><table>
+  <thead><tr><th>Phone</th><th class="n">Frames/s</th><th class="n">Received</th><th class="n">Dropped</th><th class="n">Latency p50</th><th class="n">Connected</th><th></th></tr></thead>
+  <tbody>
+  {% for d in live.devices %}
+  <tr>
+    <td><span class="dot ok"></span>{{ d.device }}</td>
+    <td class="n">{{ d.fps }}</td><td class="n">{{ d.received }}</td><td class="n">{{ d.dropped }}</td>
+    <td class="n">{{ d.latency_p50_ms }} ms</td><td class="n">{{ d.connected_s | num }} s</td>
+    <td><a href="/live?device={{ d.device }}">View</a> · <a href="/map?device={{ d.device }}">Map</a></td>
+  </tr>
+  {% endfor %}
+  </tbody>
+</table></div>
+{% else %}
+<p class="muted">No phone streaming right now.</p>
+{% endif %}
+
+<h2>Paired phones</h2>
+{% if paired %}
+<div class="table-wrap"><table>
+  <thead><tr><th>Phone</th><th>Paired</th><th>Status</th><th></th></tr></thead>
+  <tbody>
+  {% for device, created in paired.items() %}
+  <tr>
+    <td>{{ device }}</td><td class="muted">{{ created | ago }}</td>
+    <td>{% if live.devices | selectattr("device", "equalto", device) | list %}{{ badge("streaming", "ok") }}{% else %}{{ badge("offline", "") }}{% endif %}</td>
+    <td><button class="btn" hx-post="/api/devices/{{ device }}/revoke" hx-target="#devices" hx-confirm="Forget {{ device }}? It will have to pair again.">Forget</button></td>
+  </tr>
+  {% endfor %}
+  </tbody>
+</table></div>
+{% else %}
+<p class="muted">No phone paired yet.</p>
+{% endif %}

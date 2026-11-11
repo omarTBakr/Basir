@@ -31,7 +31,7 @@ def test_metrics_exposed_with_contract_names(client: TestClient) -> None:
 
 def test_http_requests_labelled_by_route_template(client: TestClient) -> None:
     client.get("/live")
-    client.get("/no-such-page")
+    client.get("/no/such-page")
     text = client.get("/metrics").text
     assert 'basir_http_requests_total{method="GET",path="/live",status="200"}' in text
     assert 'basir_http_requests_total{method="GET",path="unmatched",status="404"}' in text

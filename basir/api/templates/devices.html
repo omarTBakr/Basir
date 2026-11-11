@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block head %}
+<script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"></script>
+{% endblock %}
+{% block content %}
+{% if not lan_enabled %}
+<div class="unreachable"><strong>The phone listener is off.</strong> <span class="muted">Restart <code>scripts/serve.py</code> without <code>--no-lan</code>.</span></div>
+{% endif %}
+<div class="devices-grid">
+  <div id="devices" hx-get="/partials/devices" hx-trigger="load, every 2s [!document.querySelector('.token')]" hx-swap="innerHTML">
+    <p class="muted">Loading…</p>
+  </div>
+  <div>
+    <div class="card">
+      <strong>Scan with the phone</strong>
+      <p class="muted">Use the phone's camera app (or open the address in Chrome on the phone).</p>
+      <div id="qr" class="qr" data-text="{{ phone_url }}" aria-label="QR code for {{ phone_url }}"></div>
+      <p><code>{{ phone_url }}</code></p>
+      <p class="muted" style="font-size:13px">Laptop: {{ laptop }}. Nothing to install on the phone: the page streams from Chrome. For depth and the 3D map, use an ARCore phone with Google Play Services for AR.</p>
+    </div>
+    <details class="card advanced">
+      <summary>Advanced: pair by hand</summary>
+      <p class="muted">For a client that can't ask to pair (a script, a test rig): create a token and paste it into the client. It is shown once.</p>
+      <form class="inline" hx-post="/api/devices/pair" hx-target="#devices">
+        <input name="device" placeholder="device id, e.g. rig-1" required pattern="[A-Za-z0-9._\-]{1,64}">
+        <button class="btn" type="submit">Create token</button>
+      </form>
+      <p class="muted" style="margin-top:10px">Stream endpoint: <code>{{ phone_url | replace("https://", "wss://") | replace("http://", "ws://") }}ws/stream/&lt;device-id&gt;?token=…</code></p>
+    </details>
+  </div>
+</div>
+<script>
+  (() => {
+    const box = document.getElementById("qr");
+    if (typeof qrcode !== "function") { box.textContent = box.dataset.text; return; }
+    const qr = qrcode(0, "M");
+    qr.addData(box.dataset.text);
+    qr.make();
+    box.innerHTML = qr.createSvgTag({ cellSize: 4, margin: 2, scalable: true });
+  })();
+</script>
+{% endblock %}
