@@ -65,3 +65,14 @@ def test_exceptions_inside_the_run_propagate_and_close_the_run(mlflow_store: str
     with pytest.raises(RuntimeError), start_run("test-exp"):
         raise RuntimeError("boom")
     assert mlflow.active_run() is None
+
+
+def test_artifact_location_is_local_for_sqlite(tmp_path: Path, mlflow_store: str) -> None:
+    assert experiment._artifact_location() == (tmp_path / "mlartifacts").as_uri()
+
+
+def test_artifact_location_is_left_to_a_tracking_server(tmp_path: Path, clean_env: pytest.MonkeyPatch) -> None:
+    clean_env.setenv("BASIR_DATA_DIR", str(tmp_path))
+    clean_env.setenv("BASIR_MLFLOW_TRACKING_URI", "http://127.0.0.1:5000")
+    assert experiment._artifact_location() is None
+    assert not (tmp_path / "mlartifacts").exists()

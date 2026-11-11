@@ -44,6 +44,7 @@ class Settings(BaseModel):
     langfuse_public_key: str | None = Field(default=None, description="Langfuse public key")
     langfuse_secret_key: str | None = Field(default=None, description="Langfuse secret key")
     langfuse_base_url: str | None = Field(default=None, description="Langfuse URL (default: Langfuse Cloud)")
+    prometheus_url: str = Field(default="http://127.0.0.1:9090", description="Prometheus of the local stack")
 
     def __init__(self, _env_file: Path | str | None = None, **values: Any):
         """Load settings. An explicit `_env_file` is used on its own: if it does not
