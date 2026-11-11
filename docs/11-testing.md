@@ -43,11 +43,16 @@ Ruff is pinned in the `dev` group and configured in `pyproject.toml`: line lengt
 
 ## Type checking
 
-The code is fully type-annotated (`from __future__ import annotations` everywhere, `Protocol`s for the swappable seams such as `FrameSource`, `FrameBus` and `InferenceBackend`). **mypy** checks it as part of CI and the pre-commit hooks below.
+The code is fully type-annotated (`from __future__ import annotations` everywhere, `Protocol`s for the swappable seams such as `FrameSource`, `FrameBus` and `InferenceBackend`). **mypy** runs in CI as a non-blocking job (`uv run --with mypy mypy basir utilities`): it reports two known issues today (missing `tqdm` stubs, an `observe()` overload in `utilities/tracing.py`). Once those are fixed, the job becomes blocking.
 
 ## CI and pre-commit
 
-- **GitHub Actions.** A workflow in `.github/workflows/` runs the checks on every push and pull request.
-- **pre-commit.** `.pre-commit-config.yaml` runs the same checks locally before each commit.
+- **GitHub Actions** ([`.github/workflows/ci.yml`](../.github/workflows/ci.yml)): on every push and pull request, except the docs-only `software_engineering` branch. Three jobs:
+  - **ruff:** `ruff check` and `ruff format --check`.
+  - **pytest:** the full suite, with no GPU and an empty `BASIR_DATA_DIR`. The environment uses CPU-only torch ([`.github/scripts/sync-cpu-env.sh`](../.github/scripts/sync-cpu-env.sh)), which skips about 2.9 GB of CUDA wheels; the local lock is unchanged.
+  - **mypy:** non-blocking, as above.
+- **pre-commit** ([`.pre-commit-config.yaml`](../.pre-commit-config.yaml)): ruff (fix + format) and file hygiene (trailing whitespace, final newline, YAML, large files, private keys) on every commit; the full test suite on every push. Turn it on once per clone:
 
-Both run what this page describes; see those files for the exact jobs and hook versions.
+  ```bash
+  uv run pre-commit install --hook-type pre-commit --hook-type pre-push
+  ```
