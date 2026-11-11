@@ -15,7 +15,6 @@ from utilities.config import get_settings
 
 TASK_QUEUE = "basir-pipelines"
 NAMESPACE = "default"
-TEMPORAL_UI_PORT = 8233
 
 ACTIVITIES: list[Callable[..., Any]] = [
     phase0_steps.open_pipeline_run,
@@ -47,6 +46,5 @@ def create_worker(client: Client, max_concurrent_activities: int = 4) -> Worker:
 
 
 def workflow_url(workflow_id: str) -> str:
-    """The workflow's page in the Temporal UI (same host as TEMPORAL_ADDRESS, port 8233)."""
-    host = get_settings().temporal_address.rsplit(":", 1)[0]
-    return f"http://{host}:{TEMPORAL_UI_PORT}/namespaces/{NAMESPACE}/workflows/{workflow_id}"
+    """The workflow's page in the Temporal UI at TEMPORAL_UI_URL."""
+    return f"{get_settings().temporal_ui_url.rstrip('/')}/namespaces/{NAMESPACE}/workflows/{workflow_id}"

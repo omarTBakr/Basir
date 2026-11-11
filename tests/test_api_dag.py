@@ -5,6 +5,7 @@ from __future__ import annotations
 import pytest
 
 from basir.api.dag import GAP_X, NODE_W, layout, parse_dag, status_class
+from basir.pipelines.dag import Dag, Step
 
 
 def test_parse_pipeline_format() -> None:
@@ -15,9 +16,14 @@ def test_parse_pipeline_format() -> None:
     assert parse_dag(raw) == (["prepare", "replay", "cloud"], [("prepare", "replay"), ("prepare", "cloud")])
 
 
-def test_parse_alternative_shapes() -> None:
-    names, edges = parse_dag({"nodes": ["a"], "edges": [["a", "b"], {"from": "b", "to": "c"}, "junk"]})
-    assert names == ["a", "b", "c"] and edges == [("a", "b"), ("b", "c")]
+def test_parse_reads_what_the_pipeline_writes() -> None:
+    dag = Dag((Step("a", "x"), Step("b", "y", "fr1/desk", ("a",)), Step("c", "z", None, ("a", "b"))))
+    assert parse_dag(dag.to_json()) == (["a", "b", "c"], dag.edges)
+
+
+def test_parse_skips_malformed_entries() -> None:
+    names, edges = parse_dag({"nodes": [{"id": "a"}, "junk", {}], "edges": [["a", "b"], {"source": "a"}, "junk"]})
+    assert names == ["a"] and edges == []
     assert parse_dag(None) == ([], [])
 
 

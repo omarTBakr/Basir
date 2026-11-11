@@ -60,18 +60,19 @@ class Dag:
 
 
 def parse_dag(raw: Any) -> tuple[list[str], list[tuple[str, str]]]:
-    """Node names and (source, target) edges from `dag.json`.
+    """Node names and (source, target) edges from a `dag.json` written by `basir.pipelines.dag.Dag.to_json`.
 
-    Accepts nodes as strings or objects with `id`/`name`, and edges as pairs or objects
-    with `source`/`target` (or `from`/`to`).
+    Anything malformed is skipped, so a partial or foreign file shows what it can instead of raising.
     """
     if not isinstance(raw, dict):
         return [], []
-    names = [_node_name(n) for n in raw.get("nodes", [])]
-    edges = [e for e in (_edge(e) for e in raw.get("edges", [])) if e is not None]
-    for source, target in edges:  # an edge may name a step the node list forgot
-        names += [n for n in (source, target) if n not in names]
-    return [n for n in dict.fromkeys(names) if n], edges
+    names = [str(n["id"]) for n in raw.get("nodes", []) if isinstance(n, dict) and n.get("id")]
+    edges = [
+        (str(e["source"]), str(e["target"]))
+        for e in raw.get("edges", [])
+        if isinstance(e, dict) and e.get("source") is not None and e.get("target") is not None
+    ]
+    return list(dict.fromkeys(names)), edges
 
 
 def layout(names: list[str], edges: list[tuple[str, str]], statuses: dict[str, str]) -> Dag:
@@ -97,19 +98,3 @@ def layout(names: list[str], edges: list[tuple[str, str]], statuses: dict[str, s
     width = max(columns * (NODE_W + GAP_X) - GAP_X, 0)
     height = max(max(rows.values(), default=0) * (NODE_H + GAP_Y) - GAP_Y, 0)
     return Dag(nodes, edges, width, height)
-
-
-def _node_name(node: Any) -> str:
-    if isinstance(node, dict):
-        return str(node.get("id") or node.get("name") or "")
-    return str(node)
-
-
-def _edge(edge: Any) -> tuple[str, str] | None:
-    if isinstance(edge, list | tuple) and len(edge) == 2:
-        return str(edge[0]), str(edge[1])
-    if isinstance(edge, dict):
-        source, target = edge.get("source", edge.get("from")), edge.get("target", edge.get("to"))
-        if source is not None and target is not None:
-            return str(source), str(target)
-    return None

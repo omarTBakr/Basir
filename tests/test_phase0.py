@@ -40,7 +40,7 @@ from basir.pipelines.phase0_steps import (
     ReplayResult,
     StepContext,
 )
-from basir.pipelines.runtime import ACTIVITIES, TASK_QUEUE
+from basir.pipelines.runtime import ACTIVITIES, TASK_QUEUE, workflow_url
 
 DESK, ROOM = "fr1/desk", "fr1/room"
 _offline = False  # set once the test-server download has failed, so later tests skip straight to the CLI
@@ -234,3 +234,8 @@ def test_real_steps_log_the_dag_to_mlflow(passes: bool, clean_env: pytest.Monkey
         a.path for a in client.list_artifacts(cloud_run.info.run_id)
     }
     assert children[f"replay:{datasets[0]}"].data.metrics["frames"] == 4
+
+
+def test_workflow_url_uses_the_temporal_ui_setting(clean_env: pytest.MonkeyPatch) -> None:
+    clean_env.setenv("TEMPORAL_UI_URL", "http://gpu-box:8080/")
+    assert workflow_url("phase0-x") == "http://gpu-box:8080/namespaces/default/workflows/phase0-x"
