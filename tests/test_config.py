@@ -30,6 +30,7 @@ def test_defaults_when_explicit_file_is_missing(tmp_path: Path, clean_env: pytes
 def test_project_env_is_used_by_default(tmp_path: Path, clean_env: pytest.MonkeyPatch) -> None:
     (tmp_path / "env").mkdir()
     (tmp_path / "env" / ".env").write_text("APP_ENV=staging\n")
+    clean_env.delenv("ENV_FILE")
     clean_env.setattr(config, "PROJECT_ROOT", tmp_path)
     assert Settings().app_env == "staging"
 
@@ -37,6 +38,7 @@ def test_project_env_is_used_by_default(tmp_path: Path, clean_env: pytest.Monkey
 def test_root_env_file_is_no_longer_read(tmp_path: Path, clean_env: pytest.MonkeyPatch) -> None:
     """Settings live in env/.env; a leftover .env at the project root is ignored."""
     (tmp_path / ".env").write_text("APP_ENV=old-location\n")
+    clean_env.delenv("ENV_FILE")
     clean_env.setattr(config, "PROJECT_ROOT", tmp_path)
     assert Settings().app_env == "development"
 

@@ -24,12 +24,17 @@ UNREACHABLE = "127.0.0.1:1"  # nothing listens on port 1
 
 @pytest.fixture
 def clean_env(monkeypatch: pytest.MonkeyPatch) -> Iterator[pytest.MonkeyPatch]:
-    """Remove every env var Settings reads (plain and BASIR_-prefixed) and reset the cache."""
+    """Remove every env var Settings reads (plain and BASIR_-prefixed) and reset the cache.
+
+    ENV_FILE points at an empty source, so the developer's real env/.env (e.g. an MLflow
+    server URI) never leaks into tests. Tests of the default lookup unset it themselves.
+    """
     fields = {name.lower() for name in Settings.model_fields}
     for key in list(os.environ):
         k = key.lower()
         if k in fields or k == "env_file" or (k.startswith(ENV_PREFIX) and k[len(ENV_PREFIX) :] in fields):
             monkeypatch.delenv(key, raising=False)
+    monkeypatch.setenv("ENV_FILE", os.devnull)
     get_settings.cache_clear()
     yield monkeypatch
     get_settings.cache_clear()
