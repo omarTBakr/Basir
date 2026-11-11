@@ -1,18 +1,11 @@
-# Basir
-
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="logo/basir-logo-dark.svg">
-    <img src="logo/basir-logo-light.svg" alt="Basir logo: the scanned room with a pin on the found object and a chat between you and Basir" width="120">
+    <img src="logo/basir-logo-light.svg" alt="Basir logo: the scanned room with a pin on the found object and a chat between you and Basir" width="160">
   </picture>
 </p>
 
-<p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="logo/basir-readme-dark.svg">
-    <img src="logo/basir-readme-light.svg" alt="Basir: the room it scanned, shown on a phone, with a question and Basir's answer beside it" width="460">
-  </picture>
-</p>
+<h1 align="center">Basir</h1>
 
 <div align="center">
 
