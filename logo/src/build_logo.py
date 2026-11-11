@@ -1,9 +1,7 @@
-"""Build Basir's logo and README image from the room it reconstructed in Phase 0.
+"""Build Basir's logo from the room it reconstructed in Phase 0.
 
-    logo   the scanned room as isometric voxels + a two-bubble chat + a pin on the found object
-    readme the same scan on a phone screen, with the conversation beside it
-
-Each is written as light and dark SVG (colours baked in, the scan embedded as a tinted PNG)
+The scanned room as isometric voxels + a two-bubble chat + a pin on the found object,
+written as light and dark SVG (colours baked in, the scan embedded as a tinted PNG)
 plus PNG sizes, rasterised with headless Google Chrome.
 
     uv run python logo/src/build_logo.py            # writes logo/*.svg and logo/*.png
@@ -243,23 +241,12 @@ def scene(route: np.ndarray, target: np.ndarray, left: float, top: float, w: flo
 def compositions(route: np.ndarray, target: np.ndarray) -> dict[str, dict]:
     """Where the scan sits (left, top, width as canvas fractions) and what is drawn over it."""
     logo_layer = (0.0, 0.16, 0.84)
-    readme_layer = (0.10, 0.27, 0.54)
-    phone = (
-        '<rect x="80" y="70" width="600" height="890" rx="92" style="fill:none;stroke:var(--ink);stroke-width:30"/>'
-        '<rect x="300" y="108" width="160" height="22" rx="11" style="fill:var(--ink)"/>'
-    )
     return {
         "basir-logo": {
             "title": "Basir logo",
             "layer": logo_layer,
             "svg": scene(route, target, *logo_layer) + chat_pair(PX * 0.56, PX * 0.03, 0.85),
             "sizes": [512, 256, 128, 64, 32],
-        },
-        "basir-readme": {
-            "title": "Basir: the scanned room on your phone, with the conversation",
-            "layer": readme_layer,
-            "svg": phone + scene(route, target, *readme_layer) + chat_pair(PX * 0.52, PX * 0.40, 0.78),
-            "sizes": [1024],
         },
     }
 
