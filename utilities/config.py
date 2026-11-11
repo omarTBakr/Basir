@@ -45,6 +45,9 @@ class Settings(BaseModel):
     langfuse_secret_key: str | None = Field(default=None, description="Langfuse secret key")
     langfuse_base_url: str | None = Field(default=None, description="Langfuse URL (default: Langfuse Cloud)")
 
+    # Orchestration: Temporal runs the pipelines
+    temporal_address: str = Field(default="127.0.0.1:7233", description="Temporal frontend host:port")
+
     def __init__(self, _env_file: Path | str | None = None, **values: Any):
         """Load settings. An explicit `_env_file` is used on its own: if it does not
         exist, no .env file is read (it never falls back to the project's .env)."""

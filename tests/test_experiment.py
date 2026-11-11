@@ -8,7 +8,16 @@ from pathlib import Path
 import pytest
 
 import utilities.experiment as experiment
-from utilities.experiment import log_artifact, log_metrics, log_params, start_run
+from utilities.experiment import (
+    close_run,
+    log_artifact,
+    log_metrics,
+    log_params,
+    open_run,
+    run_url,
+    set_tags,
+    start_run,
+)
 
 
 @pytest.fixture
@@ -61,7 +70,50 @@ def test_broken_tracking_uri_warns_but_does_not_raise(
 
 def test_exceptions_inside_the_run_propagate_and_close_the_run(mlflow_store: str) -> None:
     import mlflow
+    from mlflow.tracking import MlflowClient
 
-    with pytest.raises(RuntimeError), start_run("test-exp"):
+    with pytest.raises(RuntimeError), start_run("test-exp") as run_id:
         raise RuntimeError("boom")
     assert mlflow.active_run() is None
+    assert MlflowClient(tracking_uri=mlflow_store).get_run(run_id).info.status == "FAILED"
+
+
+def test_open_run_stays_open_until_closed_and_hosts_nested_runs(tmp_path: Path, mlflow_store: str) -> None:
+    from mlflow.tracking import MlflowClient
+
+    client = MlflowClient(tracking_uri=mlflow_store)
+    artifact = tmp_path / "dag.json"
+    artifact.write_text("{}")
+    parent = open_run("test-exp", run_name="pipeline", tags={"stage": "x"}, params={"n": 2}, artifacts=[artifact])
+    assert parent and client.get_run(parent).info.status == "RUNNING"
+
+    with start_run("test-exp", run_name="child", parent_run_id=parent) as child:
+        set_tags({"step": "done"})
+    child_run = client.get_run(child)
+    assert child_run.data.tags["mlflow.parentRunId"] == parent and child_run.data.tags["step"] == "done"
+
+    close_run(parent, failed=True, tags={"stage": "y"})
+    run = client.get_run(parent)
+    assert (run.info.status, run.data.tags["stage"], run.data.params) == ("FAILED", "y", {"n": "2"})
+    assert [a.path for a in client.list_artifacts(parent)] == ["dag.json"]
+    close_run(None)  # no run: nothing to do
+
+
+def test_open_run_with_broken_tracking_returns_none(clean_env: pytest.MonkeyPatch) -> None:
+    clean_env.setenv("BASIR_MLFLOW_TRACKING_URI", "unsupported-scheme://nowhere")
+    clean_env.setattr(experiment, "_warned", False)
+    assert open_run("test-exp") is None
+    set_tags({"a": "b"})  # outside a run: a no-op
+
+
+def test_run_url_only_for_tracking_servers(mlflow_store: str, clean_env: pytest.MonkeyPatch) -> None:
+    from types import SimpleNamespace
+
+    from utilities.config import get_settings
+
+    assert run_url("abc") is None  # local SQLite store
+    clean_env.setenv("BASIR_MLFLOW_TRACKING_URI", "http://127.0.0.1:5000/")
+    get_settings.cache_clear()
+    run = SimpleNamespace(info=SimpleNamespace(experiment_id="7"))
+    clean_env.setattr(experiment, "MlflowClient", lambda uri: SimpleNamespace(get_run=lambda run_id: run))
+    assert run_url("abc") == "http://127.0.0.1:5000/#/experiments/7/runs/abc"

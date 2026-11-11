@@ -8,7 +8,7 @@ import numpy as np
 import pytest
 
 from basir.core.types import CameraIntrinsics, Frame
-from basir.ingest.playback import Pacer, PlaybackStats
+from basir.ingest.playback import Pacer, PlaybackStats, play
 
 INTR = CameraIntrinsics(1.0, 1.0, 0.5, 0.5, 2, 2)
 
@@ -61,3 +61,19 @@ def test_stats() -> None:
     assert stats.fps == pytest.approx(4.0)
     assert stats.depth_valid_pct == pytest.approx(37.5)  # 75 % valid in one frame, none counted in the other
     assert PlaybackStats().fps == 0.0 and PlaybackStats().depth_valid_pct == 0.0
+    assert stats.metrics() == {"frames": 2, "fps": 4.0, "depth_valid_pct": 37.5, "wall_seconds": 0.5}
+
+
+def test_play_counts_frames_and_stops_when_asked() -> None:
+    depth = np.ones((2, 2), np.float32)
+    frames = [_frame(depth) for _ in range(5)]
+    assert play(frames, Pacer(speed=0)).frames == 5
+    seen: list[Frame] = []
+
+    def until_third(frame: Frame) -> bool:
+        seen.append(frame)
+        return len(seen) < 3
+
+    stats = play(frames, Pacer(speed=0), on_frame=until_third)
+    assert stats.frames == 3 and len(seen) == 3
+    assert stats.depth_valid_pct == 100.0

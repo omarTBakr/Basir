@@ -15,50 +15,23 @@ a top-down image and the camera trajectory.
 from __future__ import annotations
 
 import argparse
-from dataclasses import asdict, dataclass
 import logging
 from pathlib import Path
 import sys
-import time
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-import cv2
 import numpy as np
 import open3d as o3d
 
 from basir.core.types import Frame
 from basir.ingest.datasets.prepare import dataset_dir
 from basir.ingest.sources.tum import TUMDatasetSource
-from basir.spatial.pointcloud import average_consistency, build_cloud, top_down_image
+from basir.spatial.fusion import TARGET_MEDIAN_CM, TARGET_WITHIN_5CM, fuse, save_outputs
 from utilities.config import get_settings
 from utilities.experiment import log_artifact, log_metrics, log_params, start_run
 
 logger = logging.getLogger("visualize_pointcloud")
-
-# Phase 0 targets (plan): median residual <= 3 cm and >= 80 % of points within 5 cm.
-TARGET_MEDIAN_CM = 3.0
-TARGET_WITHIN_5CM = 0.80
-
-
-@dataclass
-class CloudResult:
-    frames_used: int
-    points_raw: int
-    points_downsampled: int
-    seconds: float
-    consistency_median_cm: float | None
-    consistency_p90_cm: float | None
-    consistency_within_5cm: float | None
-    consistency_pairs: int
-
-    @property
-    def passes(self) -> bool:
-        return (
-            self.consistency_median_cm is not None
-            and self.consistency_median_cm <= TARGET_MEDIAN_CM
-            and (self.consistency_within_5cm or 0) >= TARGET_WITHIN_5CM
-        )
 
 
 def trajectory_lines(frames: list[Frame]) -> o3d.geometry.LineSet:
@@ -92,8 +65,6 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     out_ply = args.save or get_settings().outputs_dir / f"{root.name}.ply"
-    out_ply.parent.mkdir(parents=True, exist_ok=True)
-    out_png, out_csv = out_ply.with_suffix(".topdown.png"), out_ply.with_suffix(".trajectory.csv")
 
     with start_run("phase0-pointcloud", run_name=root.name, tags={"dataset": root.name}):
         log_params(
@@ -106,47 +77,25 @@ def main(argv: list[str] | None = None) -> int:
                 "intrinsics_source": source.intrinsics_source,
             }
         )
-        started = time.perf_counter()
         frames = list(source)
-        cloud, raw = build_cloud(frames, args.pixel_stride, args.voxel)
-        score, pairs = average_consistency(frames, args.gap)
-        result = CloudResult(
-            frames_used=len(frames),
-            points_raw=raw,
-            points_downsampled=len(cloud.points),
-            seconds=time.perf_counter() - started,
-            consistency_median_cm=score.median_cm if score else None,
-            consistency_p90_cm=score.p90_cm if score else None,
-            consistency_within_5cm=score.within_5cm if score else None,
-            consistency_pairs=pairs,
-        )
-
-        o3d.io.write_point_cloud(str(out_ply), cloud)
-        cv2.imwrite(str(out_png), top_down_image(cloud, frames))
-        np.savetxt(
-            out_csv,
-            np.array([[f.timestamp, *f.pose.position] for f in frames if f.pose is not None]),
-            delimiter=",",
-            header="timestamp,x,y,z",
-            comments="",
-            fmt="%.6f",
-        )
-        log_metrics({k: v for k, v in asdict(result).items() if v is not None} | {"passes": float(result.passes)})
-        for path in (out_ply, out_png, out_csv):
+        cloud, result = fuse(frames, args.pixel_stride, args.voxel, args.gap)
+        outputs = save_outputs(cloud, frames, out_ply)
+        log_metrics(result.metrics())
+        for path in outputs:
             log_artifact(path)
 
     print(
         f"{root.name}: {result.frames_used} frames, {result.points_raw:,} points -> "
         f"{result.points_downsampled:,} after {args.voxel} m voxels ({result.seconds:.1f} s)"
     )
-    if score:
+    if result.consistency_median_cm is not None:
         verdict = "PASS" if result.passes else "CHECK"
         print(
-            f"Depth consistency over {pairs} pairs: median {score.median_cm:.2f} cm, "
-            f"p90 {score.p90_cm:.2f} cm, {score.within_5cm:.0%} within 5 cm -> {verdict} "
+            f"Depth consistency over {result.consistency_pairs} pairs: median {result.consistency_median_cm:.2f} cm, "
+            f"p90 {result.consistency_p90_cm:.2f} cm, {result.consistency_within_5cm:.0%} within 5 cm -> {verdict} "
             f"(target: median <= {TARGET_MEDIAN_CM} cm, >= {TARGET_WITHIN_5CM:.0%} within 5 cm)"
         )
-    print(f"Saved {out_ply}, {out_png.name}, {out_csv.name}")
+    print(f"Saved {', '.join(str(p) for p in outputs)}")
 
     if not args.no_window:
         axes = o3d.geometry.TriangleMesh.create_coordinate_frame(size=0.3)
