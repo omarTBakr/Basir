@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
+
 import cv2
 import numpy as np
 import pytest
@@ -65,9 +67,10 @@ def test_the_frame_is_at_the_depth_resolution_with_scaled_intrinsics() -> None:
 
     assert frame.id == 9 and frame.timestamp == 12.5
     assert frame.rgb.shape == (120, 160, 3) and frame.depth is not None and frame.depth.shape == (120, 160)
-    assert frame.intrinsics == CameraIntrinsics(
+    assert replace(frame.intrinsics, depth_scale=1000.0) == CameraIntrinsics(
         fx=125.0, fy=125.0, cx=79.5, cy=59.5, width=160, height=120, depth_scale=1000.0
     )
+    assert frame.intrinsics.depth_scale == pytest.approx(1000.0)
     assert frame.pose is not None and np.array_equal(frame.pose.matrix, pose) and frame.pose.timestamp == 12.5
     assert frame.rgb[60, 10, 0] > 200 and frame.rgb[60, 150, 0] < 50  # left half red, after the resize
     # the principal point back-projects onto the optical axis

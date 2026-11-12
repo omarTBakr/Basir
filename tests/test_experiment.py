@@ -133,6 +133,7 @@ def test_explicit_settings_choose_the_store(tmp_path: Path, mlflow_store: str) -
     """An app built with its own Settings logs there, not to the global store."""
     from mlflow.tracking import MlflowClient
 
+    (tmp_path / "own").mkdir()
     own = Settings(_env_file=tmp_path / "none.env", data_dir=str(tmp_path / "own"))
     with start_run("own-exp", run_name="mine", settings=own) as run_id:
         assert run_id

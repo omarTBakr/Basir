@@ -174,7 +174,10 @@ class ProcessBackend:
 
     def _on_death(self) -> None:
         """The child died mid-batch: log once, mark it down and restart it once (caller holds the lock)."""
-        code = self._process.exitcode if self._process is not None else None
+        code = None
+        if self._process is not None:
+            self._process.join(timeout=2)  # reap it, so the exit code is known
+            code = self._process.exitcode
         logger.error("GPU worker died (exit code %s)", code)
         self._shutdown()
         if self.restarts_left <= 0:

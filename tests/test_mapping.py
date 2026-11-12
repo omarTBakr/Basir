@@ -172,7 +172,7 @@ def test_session_count_is_capped(tmp_path: Path) -> None:
     maps = manager(tmp_path, map_max_sessions=2)
     a, b = maps.session("a"), maps.session("b")
     assert a is not None and b is not None
-    a.last_active, b.last_active = 1.0, 2.0
+    a.last_active, b.last_active = time.monotonic() - 2, time.monotonic() - 1  # both well within the TTL
     assert maps.session("c") is not None  # the longest-idle map ("a") made room
     assert sorted(maps.sessions) == ["b", "c"]
     for s in maps.sessions.values():
