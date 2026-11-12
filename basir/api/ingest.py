@@ -21,7 +21,6 @@ from dataclasses import dataclass
 import json
 import logging
 from pathlib import Path
-import re
 import time
 
 from fastapi import APIRouter, FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
@@ -37,13 +36,12 @@ from basir.api.mapping import MapManager
 from basir.api.metrics import FRAMES_DROPPED, FRAMES_RECEIVED, QUEUE_DEPTH, WS_CONNECTIONS
 from basir.api.middleware import add_standard_middleware, get_request_id, ip_or_local_host
 from basir.api.pairing import PairingRequests
-from basir.api.protocol import ProtocolError, decode_frame
+from basir.api.protocol import DEVICE_ID, ProtocolError, decode_frame, valid_device_id
 from basir.api.tokens import TokenStore
 from basir.api.viewer import LatestFrames
 
 logger = logging.getLogger("basir.ingest")
 
-DEVICE_ID = re.compile(r"^[A-Za-z0-9._-]{1,64}$")
 POLICY_VIOLATION = 1008  # WebSocket close codes
 TRY_AGAIN_LATER = 1013
 AUTH_TIMEOUT_S = 10.0  # a LAN client must send its auth message this soon after connecting
@@ -69,7 +67,7 @@ class IngestState:
 class PairAsk(BaseModel):
     """A phone asking to join: its device ID and a name to show on the Devices tab."""
 
-    device: str = Field(pattern=r"^[A-Za-z0-9._-]{1,64}$")
+    device: str = Field(pattern=DEVICE_ID.pattern)
     label: str = ""
 
 
@@ -98,7 +96,7 @@ def create_ingest_app(console: FastAPI) -> FastAPI:
         return {"status": "ok", "service": "basir"}
 
     @app.post("/pair")
-    def pair(request: Request, ask: PairAsk) -> dict[str, str]:
+    async def pair(request: Request, ask: PairAsk) -> dict[str, str]:
         """Ask to join; the phone shows the returned code and polls `/pair/{id}` until approved."""
         state = _ready(request)
         address = request.client.host if request.client else "?"
@@ -112,7 +110,7 @@ def create_ingest_app(console: FastAPI) -> FastAPI:
         return {"request_id": pending.id, "code": pending.code, "status": "pending"}
 
     @app.get("/pair/{request_id}")
-    def pair_status(request: Request, request_id: str) -> dict[str, object]:
+    async def pair_status(request: Request, request_id: str) -> dict[str, object]:
         """`pending`, `denied`, or once `approved` with the token (handed over a single time)."""
         answer = _ready(request).pairing.collect(request_id)
         if answer is None:
@@ -157,12 +155,12 @@ async def _auth_message(websocket: WebSocket) -> str | None:
 @router.websocket("/ws/stream/{device_id}")
 async def stream(websocket: WebSocket, device_id: str) -> None:
     """Receive one phone's frames and send back its results until it disconnects."""
+    if not valid_device_id(device_id):  # before any state, metric or log line is created for it
+        await websocket.close(POLICY_VIOLATION, "invalid device id")
+        return
     state = _state(websocket)
     if state is None:
         await websocket.close(TRY_AGAIN_LATER, "server is starting")
-        return
-    if not DEVICE_ID.match(device_id):
-        await websocket.close(POLICY_VIOLATION, "invalid device id")
         return
     if getattr(websocket.app.state, "require_token", False) and not await _authenticate(websocket, state, device_id):
         return
@@ -185,6 +183,7 @@ async def stream(websocket: WebSocket, device_id: str) -> None:
         state.bus.remove(device_id)
         state.devices.disconnect(device_id)
         state.latest.forget(device_id)
+        state.maps.disconnected(device_id)  # map evicted after MAP_IDLE_TTL_S
         with suppress(KeyError):
             QUEUE_DEPTH.remove(device_id)
         WS_CONNECTIONS.dec()
@@ -211,6 +210,8 @@ async def _authenticate(websocket: WebSocket, state: IngestState, device_id: str
 
 async def _receive_frames(websocket: WebSocket, state: IngestState, session: DeviceSession) -> None:
     device = session.device
+    owner = getattr(websocket.app.state, "console", websocket.app)
+    max_side = owner.state.settings.ingest_max_image_side
     while True:
         message = await websocket.receive()
         if message["type"] == "websocket.disconnect":
@@ -219,7 +220,7 @@ async def _receive_frames(websocket: WebSocket, state: IngestState, session: Dev
         try:
             if data is None:
                 raise ProtocolError("frames must be binary messages")
-            header, jpeg, depth = decode_frame(data)
+            header, jpeg, depth = decode_frame(data, max_side)
             if not jpeg.startswith(JPEG_MAGIC):
                 raise ProtocolError("payload is not a JPEG")
         except ProtocolError as e:
@@ -229,7 +230,7 @@ async def _receive_frames(websocket: WebSocket, state: IngestState, session: Dev
         state.latest.publish(frame)
         state.maps.submit(frame)
         dropped = state.bus.put(frame)
-        session.record_received(dropped)
+        session.record_received(dropped, frame.received_wall)
         FRAMES_RECEIVED.labels(device).inc()
         if dropped:
             FRAMES_DROPPED.labels(device).inc()

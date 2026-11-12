@@ -33,7 +33,7 @@ from basir.api.middleware import LOOPBACK_HOSTS, TEST_HOSTS, add_standard_middle
 from basir.api.mlflow_view import MLflowView
 from basir.api.pairing import PairingRequests
 from basir.api.temporal_view import TemporalView
-from basir.api.tokens import DEFAULT_TTL_DAYS, TokenStore
+from basir.api.tokens import TokenStore
 from basir.api.viewer import LatestFrames
 from basir.api.worker import InferenceBackend, ProcessBackend
 from utilities.config import Settings, get_settings
@@ -45,13 +45,12 @@ def create_app(settings: Settings | None = None, backend: InferenceBackend | Non
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-        engine = backend or ProcessBackend(settings.device)
+        engine = backend or ProcessBackend(settings.device, settings.worker_startup_timeout_s)
         await asyncio.to_thread(engine.start)
         bus = InProcessFrameBus(settings.ingest_queue_size)
         devices = DeviceRegistry()
         maps = MapManager(settings)
-        # TOKEN_TTL_DAYS: read when Settings has the field (utilities/config.py), else 30 days.
-        tokens = TokenStore(settings.devices_file, getattr(settings, "token_ttl_days", DEFAULT_TTL_DAYS))
+        tokens = TokenStore(settings.devices_file, settings.token_ttl_days)  # TOKEN_TTL_DAYS
         app.state.ingest = IngestState(bus, devices, engine.device, LatestFrames(), maps, tokens, PairingRequests())
         batcher = Batcher(bus, engine, devices.deliver, settings.batch_max_size, settings.batch_max_wait_ms / 1000)
         task = asyncio.create_task(batcher.run())

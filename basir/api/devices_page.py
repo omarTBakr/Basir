@@ -9,8 +9,9 @@ from typing import Any
 from fastapi import APIRouter, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse
 
-from basir.api.ingest import DEVICE_ID, IngestState
+from basir.api.ingest import IngestState
 from basir.api.lan import lan_address, lan_addresses
+from basir.api.protocol import valid_device_id
 from basir.api.ui import live_stats, templates
 
 router = APIRouter(include_in_schema=False)
@@ -64,7 +65,7 @@ def _context(request: Request) -> dict[str, Any]:
 
 
 @router.get("/devices")
-def devices_page(request: Request) -> HTMLResponse:
+async def devices_page(request: Request) -> HTMLResponse:
     settings = request.app.state.settings
     context = {
         "page": "devices",
@@ -78,12 +79,12 @@ def devices_page(request: Request) -> HTMLResponse:
 
 
 @router.get("/partials/devices")
-def devices_partial(request: Request) -> HTMLResponse:
+async def devices_partial(request: Request) -> HTMLResponse:
     return templates.TemplateResponse(request, "partials/devices.html", _context(request))
 
 
 @router.post("/api/devices/requests/{request_id}/approve")
-def approve(request: Request, request_id: str) -> HTMLResponse:
+async def approve(request: Request, request_id: str) -> HTMLResponse:
     """Approve a phone's pairing request; the phone collects its token on its next poll."""
     state: IngestState = request.app.state.ingest
     if state.pairing.approve(request_id, state.tokens) is None:
@@ -92,16 +93,16 @@ def approve(request: Request, request_id: str) -> HTMLResponse:
 
 
 @router.post("/api/devices/requests/{request_id}/deny")
-def deny(request: Request, request_id: str) -> HTMLResponse:
+async def deny(request: Request, request_id: str) -> HTMLResponse:
     request.app.state.ingest.pairing.deny(request_id)
     return templates.TemplateResponse(request, "partials/devices.html", _context(request))
 
 
 @router.post("/api/devices/pair")
-def pair(request: Request, device: str = Form(...)) -> HTMLResponse:
+async def pair(request: Request, device: str = Form(...)) -> HTMLResponse:
     """Manual pairing: create (or replace) a phone's token, shown once in the returned fragment."""
     device = device.strip()
-    if not DEVICE_ID.match(device):
+    if not valid_device_id(device):
         raise HTTPException(400, "device id: 1-64 letters, digits, '.', '_' or '-'")
     state: IngestState = request.app.state.ingest
     token = state.tokens.create(device)
@@ -110,6 +111,8 @@ def pair(request: Request, device: str = Form(...)) -> HTMLResponse:
 
 
 @router.post("/api/devices/{device_id}/revoke")
-def revoke(request: Request, device_id: str) -> HTMLResponse:
+async def revoke(request: Request, device_id: str) -> HTMLResponse:
+    if not valid_device_id(device_id):
+        raise HTTPException(404, "invalid device id")
     request.app.state.ingest.tokens.revoke(device_id)
     return templates.TemplateResponse(request, "partials/devices.html", _context(request))

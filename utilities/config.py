@@ -76,6 +76,7 @@ class Settings(BaseModel):
     map_max_sessions: int = Field(default=8, ge=1, description="Most live maps kept at once")
     ingest_max_image_side: int = Field(default=4096, ge=1, description="Largest image width/height a phone may send")
     worker_startup_timeout_s: float = Field(default=120.0, gt=0, description="Wait this long for the GPU worker")
+    token_ttl_days: float = Field(default=30.0, gt=0, description="A paired phone's token stops working after this")
 
     def __init__(self, _env_file: Path | str | None = None, **values: Any):
         """Load settings. An explicit `_env_file` is used on its own: if it does not
