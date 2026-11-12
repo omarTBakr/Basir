@@ -1,19 +1,32 @@
-"""The Basir server: multi-phone WebSocket ingest, a GPU worker process, Prometheus metrics and the web UI.
+"""The Basir Console: multi-phone WebSocket ingest, a GPU worker process, live view and map, metrics and the web UI.
 
 Modules:
-    protocol       the phone <-> server wire format (binary JPEG + JSON header)
-    framebus       per-phone latest-frame-wins queues behind a swappable FrameBus interface
-    worker         the spawned GPU process (InferenceBackend) and the stub model
-    batcher        micro-batching across phones and result routing
-    devices        connected phones and their rolling statistics
-    ingest         the /ws/stream/{device_id} endpoint
-    metrics        Prometheus metric definitions, HTTP timing and /metrics
-    middleware     request IDs for HTTP and WebSocket
-    dag            pipeline DAG parsing and layout
-    mlflow_view    the MLflow summary layer (running, latest, pipelines)
-    temporal_view  running and recent Temporal workflows
-    services       Grafana / Prometheus reachability
-    grafana        embedded dashboard and panel configuration
-    ui             page and HTMX fragment routes
-    app            the app factory and lifespan
+    app             the Console app factory and lifespan (GPU worker, batcher, live maps)
+    protocol        the phone <-> server wire format (JSON header + JPEG + optional uint16 depth), device ids
+    ingest          /ws/stream/{device_id}, and the phone-only LAN app (phone page, pairing, token check)
+    framebus        per-phone latest-frame-wins queues behind a swappable FrameBus interface
+    batcher         micro-batching across phones and result routing
+    worker          the spawned GPU process (InferenceBackend, restart, basir_worker_alive) and the stub model
+    devices         connected phones and their rolling statistics
+    rgbd            decode phone colour/depth; encode depth PNGs and point batches for browsers
+    viewer          /ws/view/{device_id}: a phone's newest colour + depth for the Live tab
+    mapping         /ws/map/{device_id} and /api/map/*: per-phone live voxel maps, save as MLflow runs
+    pairing         pairing requests: a phone asks over Wi-Fi, the Devices tab approves it
+    tokens          per-phone tokens for the LAN listener, stored as SHA-256 hashes
+    tls             the phone listener's self-signed certificate
+    lan             this laptop's LAN / hotspot addresses (for the QR codes)
+    devices_page    the Devices tab: QR codes, pairing approvals, paired and connected phones
+    phone_simulator simulated phones replaying a dataset over /ws/stream
+    embed           frameable loopback proxies of the MLflow and Temporal UIs
+    tabs            the Console's tab registry (sidebar, routes, "coming later" pages)
+    metrics         Prometheus metric definitions, HTTP timing and /metrics
+    middleware      request IDs for HTTP and WebSocket
+    dag             pipeline DAG parsing and layout for the UI
+    mlflow_view     the MLflow summary layer (running, latest, pipelines)
+    temporal_view   running and recent Temporal workflows
+    services        Grafana / Prometheus reachability
+    grafana         embedded dashboard and panel configuration
+    ui              page and HTMX fragment routes
+
+Phone messages become domain `Frame`s through `basir.ingest.phone_frame.frame_from_message`.
 """
