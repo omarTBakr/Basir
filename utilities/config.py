@@ -72,6 +72,10 @@ class Settings(BaseModel):
     map_keyframe_m: float = Field(default=0.05, ge=0, description="Move this far to fuse a new keyframe")
     map_keyframe_deg: float = Field(default=5.0, ge=0, description="Or turn this many degrees")
     map_max_points: int = Field(default=2_000_000, ge=1, description="Voxels kept per live map")
+    map_idle_ttl_s: float = Field(default=600.0, gt=0, description="Free a live map after this long without frames")
+    map_max_sessions: int = Field(default=8, ge=1, description="Most live maps kept at once")
+    ingest_max_image_side: int = Field(default=4096, ge=1, description="Largest image width/height a phone may send")
+    worker_startup_timeout_s: float = Field(default=120.0, gt=0, description="Wait this long for the GPU worker")
 
     def __init__(self, _env_file: Path | str | None = None, **values: Any):
         """Load settings. An explicit `_env_file` is used on its own: if it does not
