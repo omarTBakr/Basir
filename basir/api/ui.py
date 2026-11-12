@@ -123,7 +123,7 @@ async def status_partial(request: Request) -> HTMLResponse:
     mlflow_url = settings.mlflow_ui_url
     checks = await asyncio.gather(
         probe("MLflow", mlflow_url, "/health") if mlflow_url else _local_mlflow(),
-        probe("Temporal", settings.temporal_ui_url, "/"),
+        probe("Airflow", settings.airflow_url, "/api/v2/monitor/health"),
         probe("Grafana", settings.grafana_url, "/api/health"),
         probe("Prometheus", settings.prometheus_url, "/-/ready"),
     )
@@ -148,17 +148,15 @@ async def live_api(request: Request) -> dict[str, Any]:
 @router.get("/pipelines")
 def pipelines_page(request: Request) -> HTMLResponse:
     settings = request.app.state.settings
-    return _page(
-        request, "pipelines", "Pipelines", 5, **_embed(request, "temporal_embed_port", settings.temporal_ui_url)
-    )
+    return _page(request, "pipelines", "Pipelines", 5, **_embed(request, "airflow_embed_port", settings.airflow_url))
 
 
 @router.get("/partials/pipelines")
 async def pipelines_partial(request: Request) -> HTMLResponse:
-    mlflow, temporal = await asyncio.gather(
-        _mlflow(request.app.state.mlflow.pipelines), request.app.state.temporal.snapshot()
+    mlflow, airflow = await asyncio.gather(
+        _mlflow(request.app.state.mlflow.pipelines), request.app.state.airflow.snapshot()
     )
-    return templates.TemplateResponse(request, "partials/pipelines.html", {"mlflow": mlflow, "temporal": temporal})
+    return templates.TemplateResponse(request, "partials/pipelines.html", {"mlflow": mlflow, "airflow": airflow})
 
 
 @router.get("/experiments")

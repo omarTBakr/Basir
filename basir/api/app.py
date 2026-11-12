@@ -24,6 +24,7 @@ from fastapi.staticfiles import StaticFiles
 
 from basir import __version__
 from basir.api import devices_page, ingest, mapping, metrics, ui, viewer
+from basir.api.airflow_view import AirflowView
 from basir.api.batcher import Batcher
 from basir.api.devices import DeviceRegistry
 from basir.api.framebus import InProcessFrameBus
@@ -32,10 +33,10 @@ from basir.api.mapping import MapManager
 from basir.api.middleware import LOOPBACK_HOSTS, TEST_HOSTS, add_standard_middleware
 from basir.api.mlflow_view import MLflowView
 from basir.api.pairing import PairingRequests
-from basir.api.temporal_view import TemporalView
 from basir.api.tokens import TokenStore
 from basir.api.viewer import LatestFrames
 from basir.api.worker import InferenceBackend, ProcessBackend
+from basir.pipelines.airflow_client import credentials
 from utilities.config import Settings, get_settings
 
 
@@ -66,7 +67,7 @@ def create_app(settings: Settings | None = None, backend: InferenceBackend | Non
     app = FastAPI(title="Basir", version=__version__, lifespan=lifespan)
     app.state.settings = settings
     app.state.mlflow = MLflowView(settings.mlflow_uri, settings.mlflow_ui_url)
-    app.state.temporal = TemporalView(settings.temporal_address, settings.temporal_ui_url)
+    app.state.airflow = AirflowView(settings.airflow_url, credentials(settings))
     add_standard_middleware(app, trusted_hosts=[*LOOPBACK_HOSTS, *TEST_HOSTS])
     app.include_router(metrics.router)
     app.include_router(ingest.router)

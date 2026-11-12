@@ -1,8 +1,8 @@
-"""Frameable copies of the MLflow and Temporal UIs: a loopback proxy that lets only the Console frame them.
+"""Frameable copies of the MLflow and Airflow UIs: a loopback proxy that lets only the Console frame them.
 
 Both UIs send `X-Frame-Options: SAMEORIGIN`, so the Console cannot iframe them directly, and
 both use absolute asset paths, so they cannot live under a path prefix. Each one therefore
-gets its own loopback listener (MLFLOW_EMBED_PORT, TEMPORAL_EMBED_PORT) that forwards requests
+gets its own loopback listener (MLFLOW_EMBED_PORT, AIRFLOW_EMBED_PORT) that forwards requests
 and replaces the frame-blocking headers with `Content-Security-Policy: frame-ancestors` naming
 the Console's origins only (`http://127.0.0.1:<port>` and `http://localhost:<port>`; the proxy
 is another origin, so `'self'` would block the Console). `scripts/serve.py` starts them.
@@ -14,7 +14,7 @@ Security:
   (`Forwarded`, `X-Forwarded-*` are dropped).
 - Origin: cross-site POSTs are refused (`OriginGuard`).
 - Methods: GET, HEAD and POST, plus PATCH and DELETE, which the MLflow model registry and
-  Temporal schedules use; anything else (PUT, OPTIONS, TRACE, ...) is a 405.
+  Airflow's UI use; anything else (PUT, OPTIONS, TRACE, ...) is a 405.
 - Redirects: `Location` is rewritten to a path on the proxy itself; a redirect to any other
   origin becomes `/`.
 - Request bodies over MAX_BODY_BYTES are refused (413).
