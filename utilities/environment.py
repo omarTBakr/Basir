@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from importlib.metadata import PackageNotFoundError, version
 
-PACKAGES = ["torch", "numpy", "opencv-python", "open3d", "pydantic", "tqdm", "mlflow", "langfuse", "temporalio"]
+PACKAGES = ["torch", "numpy", "opencv-python", "open3d", "pydantic", "tqdm", "mlflow", "langfuse"]
 
 
 def package_versions() -> dict[str, str | None]:

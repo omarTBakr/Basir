@@ -1,61 +1,32 @@
-"""Phase 0 pipeline as a Temporal workflow: prepare, replay and fuse the datasets, then gate on the targets.
+"""The Phase 0 pipeline's shape and parameters: prepare, replay and fuse the datasets, then gate on the targets.
 
-    check_env -> prepare_dataset:<each dataset>        (in parallel)
+    check_env -> prepare_dataset:<each dataset>        (one mapped Airflow task instance per dataset)
     prepare_dataset:<first> -> replay:<first>
     prepare_dataset:<each>  -> pointcloud:<each>
     replay + every pointcloud -> gate                 (passes only if every cloud meets the targets)
 
-The workflow walks the DAG from `phase0_dag`, starting each step as soon as its
-dependencies finish, so the DAG logged to MLflow is exactly what runs. All I/O,
-including MLflow, happens in the activities (`phase0_steps`); this code stays deterministic.
+`dags/phase0.py` runs it on Airflow; `phase0_steps` holds the step logic. This module has no
+third-party imports, so Airflow's interpreter can import it while parsing the DAG file.
 """
 
 from __future__ import annotations
 
-import asyncio
-from dataclasses import dataclass, field
-from datetime import timedelta
+from dataclasses import asdict, dataclass, field, fields
 from typing import Any
-
-from temporalio import workflow
-from temporalio.common import RetryPolicy
-from temporalio.exceptions import ApplicationError
 
 from basir.pipelines.dag import Dag, Step
 
-with workflow.unsafe.imports_passed_through():
-    from basir.pipelines.phase0_steps import (
-        CloseRunInput,
-        DatasetInput,
-        GateInput,
-        OpenRunInput,
-        PointcloudInput,
-        PointcloudResult,
-        PreparedDataset,
-        ReplayInput,
-        ReplayResult,
-        StepContext,
-        check_env,
-        close_pipeline_run,
-        gate,
-        open_pipeline_run,
-        pointcloud,
-        prepare_dataset,
-        replay,
-    )
-
 PIPELINE = "phase0"
+DAG_ID = "phase0"
 DEFAULT_DATASETS = ("fr1/desk", "fr1/room")
-
-_BOOKKEEPING = RetryPolicy(maximum_attempts=3)
-_DATA_ERRORS = ["FileNotFoundError", "ValueError"]  # bad input or missing data: retrying will not help
-_HEARTBEAT = timedelta(minutes=1)
-# Every step opens an MLflow run; a cold start (imports, database migration) can take minutes on a slow disk.
-_QUICK = timedelta(minutes=5)
+# Bookkeeping tasks around the steps: they open and close the MLflow parent run and are not DAG nodes.
+OPEN_TASK, CLOSE_TASK = "open_pipeline_run", "close_pipeline_run"
 
 
 @dataclass
-class Phase0Input:
+class Phase0Params:
+    """What a run can override (Airflow DAG params / run conf)."""
+
     datasets: list[str] = field(default_factory=lambda: list(DEFAULT_DATASETS))
     replay_stride: int = 1
     replay_speed: float = 0.0  # 0 = as fast as possible
@@ -65,17 +36,46 @@ class Phase0Input:
     gap: int = 1
     max_frames: int | None = None
 
+    @classmethod
+    def from_dict(cls, raw: dict[str, Any] | None) -> Phase0Params:
+        """Params from a run's conf; unknown keys (such as Airflow's own) are ignored, None means the default."""
+        known = {f.name for f in fields(cls)}
+        values = {k: v for k, v in (raw or {}).items() if k in known and (v is not None or k == "max_frames")}
+        params = cls(**values)
+        if not isinstance(params.datasets, list) or not all(isinstance(d, str) and d for d in params.datasets):
+            raise ValueError(f"datasets must be a list of dataset names, got {params.datasets!r}")
+        return params
 
-@dataclass
-class Phase0Result:
-    mlflow_run_id: str | None
-    passed: bool
-    replay: ReplayResult | None
-    clouds: list[PointcloudResult]
+    def as_dict(self) -> dict[str, Any]:
+        """The params logged on the MLflow parent run (unset values left out)."""
+        return {k: v for k, v in asdict(self).items() if v is not None}
+
+
+# JSON Schema of each param, turned into Airflow `Param`s by dags/phase0.py (the trigger form shows them).
+PARAM_SCHEMA: dict[str, dict[str, Any]] = {
+    "datasets": {
+        "type": "array",
+        "items": {"type": "string"},
+        "minItems": 1,
+        "description": "Preset keys (fr1/desk) or dataset folders; the first one is also replayed.",
+    },
+    "every": {"type": "integer", "minimum": 1, "description": "Point cloud: use every Nth frame."},
+    "pixel_stride": {"type": "integer", "minimum": 1, "description": "Point cloud: use every Nth pixel."},
+    "voxel": {"type": "number", "minimum": 0, "description": "Point cloud: voxel size in metres; 0 = off."},
+    "gap": {"type": "integer", "minimum": 1, "description": "Point cloud: score frame i against frame i+gap."},
+    "replay_stride": {"type": "integer", "minimum": 1, "description": "Replay: use every Nth frame."},
+    "replay_speed": {"type": "number", "minimum": 0, "description": "Replay: 1 = real time, 0 = as fast as possible."},
+    "max_frames": {"type": ["null", "integer"], "minimum": 1, "description": "Stop after this many frames."},
+}
+
+
+def param_defaults() -> dict[str, Any]:
+    """Each param's default, keyed like PARAM_SCHEMA."""
+    return asdict(Phase0Params())
 
 
 def phase0_dag(datasets: list[str]) -> Dag:
-    """The Phase 0 DAG; the first dataset is also replayed."""
+    """The Phase 0 DAG; the first dataset is also replayed. Node ids are `<task id>[:<dataset>]`."""
     if not datasets:
         raise ValueError("phase0 needs at least one dataset")
     steps = [Step("check_env", "check_env")]
@@ -84,118 +84,3 @@ def phase0_dag(datasets: list[str]) -> Dag:
     steps += [Step(f"pointcloud:{d}", "pointcloud", d, (f"prepare_dataset:{d}",)) for d in datasets]
     steps.append(Step("gate", "gate", None, tuple(s.name for s in steps if s.activity in ("replay", "pointcloud"))))
     return Dag(tuple(steps))
-
-
-@workflow.defn
-class Phase0Pipeline:
-    def __init__(self) -> None:
-        self._run_id: str | None = None
-
-    @workflow.query
-    def mlflow_run_id(self) -> str | None:
-        """The parent MLflow run, once the first activity has opened it."""
-        return self._run_id
-
-    @workflow.run
-    async def run(self, options: Phase0Input) -> Phase0Result:
-        try:
-            dag = phase0_dag(options.datasets)
-        except ValueError as e:
-            raise ApplicationError(str(e), non_retryable=True) from e
-
-        self._run_id = await workflow.execute_activity(
-            open_pipeline_run,
-            OpenRunInput(
-                pipeline=PIPELINE,
-                workflow_id=workflow.info().workflow_id,
-                dag=dag.to_json(),
-                mermaid=dag.to_mermaid(),
-                params={k: v for k, v in vars(options).items() if v is not None},
-            ),
-            start_to_close_timeout=_QUICK,
-            retry_policy=_BOOKKEEPING,
-        )
-        try:
-            results = await self._execute(dag, options)
-        except BaseException:
-            await self._close(succeeded=False)
-            raise
-        await self._close(succeeded=True)
-        return Phase0Result(
-            mlflow_run_id=self._run_id,
-            passed=True,
-            replay=next((r for r in results.values() if isinstance(r, ReplayResult)), None),
-            clouds=[r for r in results.values() if isinstance(r, PointcloudResult)],
-        )
-
-    async def _execute(self, dag: Dag, options: Phase0Input) -> dict[str, Any]:
-        """Start every step as a task that first awaits its dependencies; return each step's result."""
-        tasks: dict[str, asyncio.Task[Any]] = {}
-        for step in dag.steps:
-            tasks[step.name] = asyncio.create_task(self._step(step, [tasks[d] for d in step.depends_on], options))
-        try:
-            await asyncio.gather(*tasks.values())
-        except BaseException:
-            for task in tasks.values():
-                task.cancel()
-            raise
-        return {name: task.result() for name, task in tasks.items()}
-
-    async def _step(self, step: Step, dependencies: list[asyncio.Task[Any]], options: Phase0Input) -> Any:
-        inputs = [await task for task in dependencies]
-        ctx = StepContext(step.name, list(step.depends_on), self._run_id)
-        prepared = next((i for i in inputs if isinstance(i, PreparedDataset)), None)
-        if step.activity == "check_env":
-            return await workflow.execute_activity(
-                check_env,
-                ctx,
-                start_to_close_timeout=timedelta(minutes=10),
-                retry_policy=RetryPolicy(maximum_attempts=2),
-            )
-        if step.activity == "prepare_dataset":
-            assert step.dataset is not None
-            return await workflow.execute_activity(
-                prepare_dataset,
-                DatasetInput(ctx, step.dataset),
-                start_to_close_timeout=timedelta(hours=2),
-                heartbeat_timeout=timedelta(minutes=2),
-                retry_policy=RetryPolicy(
-                    initial_interval=timedelta(seconds=10), maximum_attempts=3, non_retryable_error_types=_DATA_ERRORS
-                ),
-            )
-        if step.activity == "replay":
-            assert prepared is not None
-            return await workflow.execute_activity(
-                replay,
-                ReplayInput(ctx, prepared, options.replay_stride, options.replay_speed, options.max_frames),
-                start_to_close_timeout=timedelta(minutes=30),
-                heartbeat_timeout=_HEARTBEAT,
-                retry_policy=RetryPolicy(maximum_attempts=2, non_retryable_error_types=_DATA_ERRORS),
-            )
-        if step.activity == "pointcloud":
-            assert prepared is not None
-            return await workflow.execute_activity(
-                pointcloud,
-                PointcloudInput(
-                    ctx, prepared, options.every, options.pixel_stride, options.voxel, options.gap, options.max_frames
-                ),
-                start_to_close_timeout=timedelta(hours=1),
-                heartbeat_timeout=_HEARTBEAT,
-                retry_policy=RetryPolicy(maximum_attempts=2, non_retryable_error_types=_DATA_ERRORS),
-            )
-        if step.activity == "gate":
-            return await workflow.execute_activity(
-                gate,
-                GateInput(ctx, [i for i in inputs if isinstance(i, PointcloudResult)]),
-                start_to_close_timeout=_QUICK,
-                retry_policy=RetryPolicy(maximum_attempts=1),  # deterministic: a retry gives the same verdict
-            )
-        raise ApplicationError(f"unknown activity '{step.activity}'", non_retryable=True)
-
-    async def _close(self, succeeded: bool) -> None:
-        await workflow.execute_activity(
-            close_pipeline_run,
-            CloseRunInput(self._run_id, succeeded),
-            start_to_close_timeout=_QUICK,
-            retry_policy=_BOOKKEEPING,
-        )

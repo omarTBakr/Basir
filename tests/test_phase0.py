@@ -1,78 +1,32 @@
-"""Tests for basir/pipelines/phase0.py: the Phase 0 workflow on a Temporal test server.
+"""Tests for the Phase 0 pipeline without Airflow: its DAG and params, the step logic, the runner.
 
-The time-skipping test server is downloaded on first use; offline, the dev server of an
-installed Temporal CLI (`temporal`) is used instead.
-
-Fake activities check ordering, parallelism and the gate; the real activities run on toy
-datasets to check the MLflow parent/child runs, their tags and the logged DAG.
+`run_locally` walks the DAG in-process exactly as dags/phase0.py wires it on Airflow, so the
+real steps run on toy datasets to check the MLflow parent/child runs, their tags and the
+logged DAG. tests/test_dags.py covers the Airflow DAG itself (inside the Airflow image).
 """
 
 from __future__ import annotations
 
-import asyncio
-from collections.abc import Callable, Sequence
-from concurrent.futures import ThreadPoolExecutor
+from dataclasses import asdict
 import json
 from pathlib import Path
-import shutil
-import threading
-import time
-from typing import Any
+import sys
 
 import pytest
-from temporalio import activity
-from temporalio.client import WorkflowFailureError
-from temporalio.exceptions import ApplicationError
-from temporalio.testing import WorkflowEnvironment
-from temporalio.worker import Worker
 
 from basir.ingest.datasets.toy import create_toy_dataset
-from basir.pipelines import phase0_steps
-from basir.pipelines.phase0 import Phase0Input, Phase0Pipeline, Phase0Result, phase0_dag
-from basir.pipelines.phase0_steps import (
-    CloseRunInput,
-    DatasetInput,
-    OpenRunInput,
-    PointcloudInput,
-    PointcloudResult,
-    PreparedDataset,
-    ReplayInput,
-    ReplayResult,
-    StepContext,
+from basir.pipelines import airflow_task, phase0_steps, runner
+from basir.pipelines.phase0 import (
+    CLOSE_TASK,
+    OPEN_TASK,
+    PARAM_SCHEMA,
+    Phase0Params,
+    param_defaults,
+    phase0_dag,
 )
-from basir.pipelines.runtime import ACTIVITIES, TASK_QUEUE, workflow_url
+from basir.pipelines.phase0_steps import GateFailed, GateInput, PointcloudResult, StepContext, StepFailed
 
 DESK, ROOM = "fr1/desk", "fr1/room"
-_offline = False  # set once the test-server download has failed, so later tests skip straight to the CLI
-
-
-pytestmark = pytest.mark.slow  # the Temporal test server (downloaded on first use) and real workflows
-
-
-async def _environment() -> WorkflowEnvironment:
-    global _offline
-    if not _offline:
-        try:
-            return await WorkflowEnvironment.start_time_skipping()
-        except RuntimeError:
-            _offline = True
-    if (cli := shutil.which("temporal")) is None:
-        pytest.skip("no Temporal test server: offline and no `temporal` CLI installed")
-    return await WorkflowEnvironment.start_local(dev_server_existing_path=cli)
-
-
-async def _execute(options: Phase0Input, activities: Sequence[Callable[..., Any]]) -> Phase0Result:
-    async with (
-        await _environment() as env,
-        Worker(
-            env.client,
-            task_queue=TASK_QUEUE,
-            workflows=[Phase0Pipeline],
-            activities=activities,
-            activity_executor=ThreadPoolExecutor(max_workers=4),
-        ),
-    ):
-        return await env.client.execute_workflow(Phase0Pipeline.run, options, id="phase0-test", task_queue=TASK_QUEUE)
 
 
 def test_dag_shape() -> None:
@@ -96,97 +50,49 @@ def test_dag_shape() -> None:
         (f"pointcloud:{DESK}", "gate"),
         (f"pointcloud:{ROOM}", "gate"),
     }
+    assert dag.task_edges == {
+        ("check_env", "prepare_dataset"),
+        ("prepare_dataset", "replay"),
+        ("prepare_dataset", "pointcloud"),
+        ("replay", "gate"),
+        ("pointcloud", "gate"),
+    }
     with pytest.raises(ValueError):
         phase0_dag([])
 
 
-class FakeSteps:
-    """Fast stand-ins for the activities that record when each step starts and ends."""
-
-    def __init__(self, median_cm: float) -> None:
-        self.median_cm = median_cm
-        self.events: list[tuple[str, str]] = []
-        self.closed: list[bool] = []
-        self.both_preparing = threading.Barrier(2, timeout=10)  # raises unless the two prepares overlap
-        self._lock = threading.Lock()
-
-    def _log(self, kind: str, step: str) -> None:
-        with self._lock:
-            self.events.append((kind, step))
-
-    def activities(self) -> list[Callable[..., Any]]:
-        @activity.defn(name="open_pipeline_run")
-        def open_run(data: OpenRunInput) -> str | None:
-            return "parent-run"
-
-        @activity.defn(name="close_pipeline_run")
-        def close_run(data: CloseRunInput) -> None:
-            self.closed.append(data.succeeded)
-
-        @activity.defn(name="check_env")
-        def check_env(ctx: StepContext) -> dict[str, str]:
-            self._log("start", ctx.step)
-            self._log("end", ctx.step)
-            return {}
-
-        @activity.defn(name="prepare_dataset")
-        def prepare(data: DatasetInput) -> PreparedDataset:
-            self._log("start", data.ctx.step)
-            assert data.ctx.parent_run_id == "parent-run" and data.ctx.depends_on == ["check_env"]
-            self.both_preparing.wait()
-            self._log("end", data.ctx.step)
-            return PreparedDataset(data.dataset, f"/data/{data.dataset}", 100)
-
-        @activity.defn(name="replay")
-        def replay(data: ReplayInput) -> ReplayResult:
-            self._log("start", data.ctx.step)
-            self._log("end", data.ctx.step)
-            return ReplayResult(data.prepared.dataset, 100, 30.0, 95.0)
-
-        @activity.defn(name="pointcloud")
-        def pointcloud(data: PointcloudInput) -> PointcloudResult:
-            self._log("start", data.ctx.step)
-            time.sleep(0.05)
-            self._log("end", data.ctx.step)
-            return PointcloudResult(data.prepared.dataset, "/out.ply", 10, 1000, self.median_cm, 0.85, 9)
-
-        return [open_run, close_run, check_env, prepare, replay, pointcloud, phase0_steps.gate]
-
-    def index(self, kind: str, step: str) -> int:
-        return self.events.index((kind, step))
+def test_params_defaults_overrides_and_validation() -> None:
+    assert set(PARAM_SCHEMA) == set(param_defaults())
+    params = Phase0Params.from_dict({"datasets": [ROOM], "every": 5, "max_frames": None, "airflow_extra": 1})
+    assert params.datasets == [ROOM] and params.every == 5 and params.pixel_stride == 4
+    assert params.as_dict() == {k: v for k, v in asdict(params).items() if v is not None}
+    assert Phase0Params.from_dict(None).datasets == [DESK, ROOM]
+    for bad in ("fr1/desk", [1], [""]):
+        with pytest.raises(ValueError):
+            Phase0Params.from_dict({"datasets": bad})
 
 
-def test_steps_follow_the_dag_and_prepares_run_in_parallel(clean_env: pytest.MonkeyPatch, tmp_path: Path) -> None:
+def _cloud(dataset: str, median_cm: float) -> PointcloudResult:
+    return PointcloudResult(dataset, "/out.ply", 10, 1000, median_cm, 0.85, 9)
+
+
+def test_gate_names_each_cloud_that_misses_a_target(clean_env: pytest.MonkeyPatch, tmp_path: Path) -> None:
     clean_env.setenv("BASIR_DATA_DIR", str(tmp_path))
-    fake = FakeSteps(median_cm=1.9)
-    result = asyncio.run(_execute(Phase0Input(), fake.activities()))
-
-    assert result.passed and result.mlflow_run_id == "parent-run"
-    assert [c.dataset for c in result.clouds] == [DESK, ROOM]
-    assert result.replay is not None and result.replay.dataset == DESK
-    assert fake.closed == [True]
-
-    i = fake.index
-    assert fake.events[:2] == [("start", "check_env"), ("end", "check_env")]
-    assert max(i("start", f"prepare_dataset:{d}") for d in (DESK, ROOM)) < min(
-        i("end", f"prepare_dataset:{d}") for d in (DESK, ROOM)
-    )
-    assert i("end", f"prepare_dataset:{DESK}") < i("start", f"replay:{DESK}")
-    for d in (DESK, ROOM):
-        assert i("end", f"prepare_dataset:{d}") < i("start", f"pointcloud:{d}")
-    assert len(fake.events) == 12  # gate is the real activity, so it logs no fake events
+    ctx = StepContext("gate", [], None)
+    assert phase0_steps.gate(GateInput(ctx, [_cloud(DESK, 1.9), _cloud(ROOM, 1.8)])) == [DESK, ROOM]
+    with pytest.raises(GateFailed) as failure:
+        phase0_steps.gate(GateInput(ctx, [_cloud(DESK, 4.2), _cloud(ROOM, 1.8)]))
+    assert f"{DESK}: median 4.20 cm" in str(failure.value) and ROOM not in str(failure.value)
+    with pytest.raises(GateFailed):
+        phase0_steps.gate(GateInput(ctx, []))
+    assert isinstance(failure.value, StepFailed) and issubclass(GateFailed, phase0_steps.NON_RETRYABLE)
 
 
-def test_gate_failure_fails_the_workflow(clean_env: pytest.MonkeyPatch, tmp_path: Path) -> None:
-    clean_env.setenv("BASIR_DATA_DIR", str(tmp_path))
-    fake = FakeSteps(median_cm=4.2)
-    with pytest.raises(WorkflowFailureError) as failure:
-        asyncio.run(_execute(Phase0Input(), fake.activities()))
-
-    cause = failure.value.cause.cause
-    assert isinstance(cause, ApplicationError) and cause.type == "GateFailed"
-    assert f"{DESK}: median 4.20 cm" in str(cause) and ROOM in str(cause)
-    assert fake.closed == [False]
+def test_execute_rejects_unknown_tasks_and_bad_params() -> None:
+    with pytest.raises(ValueError):
+        phase0_steps.execute("nope", {})
+    with pytest.raises(ValueError):
+        phase0_steps.execute("check_env", {"params": {"datasets": []}})
 
 
 @pytest.mark.parametrize("passes", [True, False])
@@ -196,15 +102,16 @@ def test_real_steps_log_the_dag_to_mlflow(passes: bool, clean_env: pytest.Monkey
     clean_env.setenv("BASIR_DATA_DIR", str(tmp_path))
     clean_env.setattr(phase0_steps, "meets_targets", lambda median, within: passes)
     datasets = [str(create_toy_dataset(tmp_path / name, num_frames=4)) for name in ("toy_a", "toy_b")]
-    options = Phase0Input(datasets=datasets, every=1, pixel_stride=1, voxel=0)
+    params = Phase0Params(datasets=datasets, every=1, pixel_stride=1, voxel=0)
 
     if passes:
-        result = asyncio.run(_execute(options, ACTIVITIES))
-        assert [c.frames_used for c in result.clouds] == [4, 4]
-        assert Path(result.clouds[0].ply).is_file()
+        results = phase0_steps.run_locally(params, "manual__phase0-test")
+        assert [c["frames_used"] for c in results["gate"]] == [4, 4]
+        assert Path(results["gate"][0]["ply"]).is_file()
+        assert results["replay"]["frames"] == 4
     else:
-        with pytest.raises(WorkflowFailureError):
-            asyncio.run(_execute(options, ACTIVITIES))
+        with pytest.raises(GateFailed):
+            phase0_steps.run_locally(params, "manual__phase0-test")
 
     client = MlflowClient(tracking_uri=f"sqlite:///{tmp_path / 'mlflow.db'}")
     experiment = client.get_experiment_by_name("phase0-pipeline")
@@ -214,9 +121,10 @@ def test_real_steps_log_the_dag_to_mlflow(passes: bool, clean_env: pytest.Monkey
 
     status = "succeeded" if passes else "failed"
     assert parent.data.tags["basir.pipeline"] == "phase0"
-    assert parent.data.tags["basir.workflow_id"] == "phase0-test"
+    assert parent.data.tags["basir.workflow_id"] == "manual__phase0-test"
     assert parent.data.tags["basir.status"] == status
     assert parent.info.status == ("FINISHED" if passes else "FAILED")
+    assert parent.data.params["every"] == "1"
 
     dag = phase0_dag(datasets)
     logged = json.loads(Path(client.download_artifacts(parent.info.run_id, "dag.json", str(tmp_path))).read_text())
@@ -239,6 +147,39 @@ def test_real_steps_log_the_dag_to_mlflow(passes: bool, clean_env: pytest.Monkey
     assert children[f"replay:{datasets[0]}"].data.metrics["frames"] == 4
 
 
-def test_workflow_url_uses_the_temporal_ui_setting(clean_env: pytest.MonkeyPatch) -> None:
-    clean_env.setenv("TEMPORAL_UI_URL", "http://gpu-box:8080/")
-    assert workflow_url("phase0-x") == "http://gpu-box:8080/namespaces/default/workflows/phase0-x"
+def test_runner_exit_codes(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
+    def fake(task: str, payload: dict[str, object]) -> object:
+        if task == "bad":
+            raise ValueError("no such dataset")
+        if task == "flaky":
+            raise ConnectionError("MLflow went away")
+        return {"echo": payload}
+
+    monkeypatch.setitem(runner.PIPELINES, "fake", lambda: (fake, (ValueError,)))
+    source, target = tmp_path / "in.json", tmp_path / "out.json"
+    source.write_text(json.dumps({"x": 1}))
+    assert runner.main(["fake", "ok", str(source), str(target)]) == 0
+    assert json.loads(target.read_text()) == {"echo": {"x": 1}}
+    assert runner.main(["fake", "bad", str(source), str(target)]) == runner.EXIT_NO_RETRY
+    assert f"{runner.ERROR_MARKER} ValueError: no such dataset" in capsys.readouterr().err
+    assert runner.main(["fake", "flaky", str(source), str(target)]) == 1
+    assert runner.main(["nope"]) == 2
+
+
+def test_run_step_runs_the_step_in_a_subprocess(clean_env: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """The Airflow side: Basir's interpreter (here the test one) runs the step; data errors do not retry."""
+    clean_env.setenv("BASIR_DATA_DIR", str(tmp_path))
+    clean_env.setenv("BASIR_PYTHON", sys.executable)
+    payload = {"params": {"datasets": [DESK]}, "parent_run_id": None}
+    clouds = [asdict(_cloud(DESK, 1.9))]
+    assert airflow_task.run_step("phase0", "gate", payload | {"clouds": clouds}) == clouds
+    with pytest.raises(airflow_task.StepFailed):
+        airflow_task.run_step("phase0", "gate", payload | {"clouds": [asdict(_cloud(DESK, 9.0))]})
+    with pytest.raises(airflow_task.StepCrashed):
+        airflow_task.run_step("phase0", "gate", payload)  # KeyError 'clouds': a bug, worth a retry
+
+
+def test_bookkeeping_task_names_match_the_dag_file() -> None:
+    text = (Path(__file__).resolve().parent.parent / "dags" / "phase0.py").read_text()
+    assert "task_id=OPEN_TASK" in text and "task_id=CLOSE_TASK" in text
+    assert (OPEN_TASK, CLOSE_TASK) == ("open_pipeline_run", "close_pipeline_run")

@@ -1,6 +1,7 @@
 """A pipeline's steps and their dependencies, with the JSON and Mermaid forms logged to MLflow.
 
-Pure Python with no I/O, so Temporal workflow code can build and walk it deterministically.
+Pure Python with no I/O and no third-party imports, so Airflow's own interpreter can import it
+when it parses `dags/` (the Basir dependencies live in a separate environment).
 """
 
 from __future__ import annotations
@@ -12,7 +13,10 @@ from typing import Any
 
 @dataclass(frozen=True)
 class Step:
-    """One node: `name` is unique (e.g. "pointcloud:fr1/room"), `activity` is the Temporal activity it runs."""
+    """One node: `name` is unique (e.g. "pointcloud:fr1/room"), `activity` is the Airflow task id that runs it.
+
+    A per-dataset step runs as one mapped instance of its task, so several nodes share an activity.
+    """
 
     name: str
     activity: str
@@ -41,6 +45,19 @@ class Dag:
     def edges(self) -> list[tuple[str, str]]:
         """(dependency, step) pairs."""
         return [(dep, step.name) for step in self.steps for dep in step.depends_on]
+
+    @property
+    def task_edges(self) -> set[tuple[str, str]]:
+        """(dependency, step) pairs between activities: the edges of the Airflow DAG that runs this one."""
+        by_name = {s.name: s.activity for s in self.steps}
+        return {(by_name[a], by_name[b]) for a, b in self.edges}
+
+    def step(self, name: str) -> Step:
+        """The step called `name` (KeyError if there is none)."""
+        for step in self.steps:
+            if step.name == name:
+                return step
+        raise KeyError(name)
 
     def to_json(self) -> dict[str, Any]:
         """{"nodes": [{"id", "activity", "dataset"}], "edges": [{"source", "target"}]}."""

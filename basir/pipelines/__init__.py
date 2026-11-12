@@ -1,1 +1,1 @@
-"""Pipelines: multi-step jobs that run as Temporal workflows, each step logged to MLflow."""
+"""Pipelines: multi-step jobs that run as Airflow DAGs (dags/), each step logged to MLflow."""

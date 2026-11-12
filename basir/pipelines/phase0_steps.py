@@ -1,41 +1,52 @@
-"""Phase 0 pipeline steps as Temporal activities, and the small payloads they exchange.
+"""Phase 0 pipeline steps, the small payloads they exchange, and `execute`, which runs one step by name.
 
 Each step logs one MLflow child run under the pipeline's parent run, tagged with
 `basir.step`, `basir.depends_on` and `basir.status`. Payloads carry paths and numbers
-only (never frames or clouds): Temporal limits a payload to 2 MB.
+only (never frames or clouds), because Airflow passes them between tasks as JSON XComs.
+
+Airflow runs every step through `basir.pipelines.runner` in Basir's own environment (see
+dags/phase0.py); `run_locally` walks the same DAG in this process, for tests and debugging.
 """
 
 from __future__ import annotations
 
 from collections.abc import Iterator
 from contextlib import contextmanager
-import contextvars
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 import json
 from pathlib import Path
 import platform
 import tempfile
-import threading
 from typing import Any
-
-from temporalio import activity
-from temporalio.exceptions import ApplicationError
 
 from basir.ingest.datasets.prepare import dataset_dir, download_dataset
 from basir.ingest.playback import Pacer, play
 from basir.ingest.sources.tum import TUMDatasetSource
+from basir.pipelines.dag import Dag
+from basir.pipelines.phase0 import CLOSE_TASK, OPEN_TASK, PIPELINE, Phase0Params, phase0_dag
 from basir.spatial.fusion import TARGET_MEDIAN_CM, TARGET_WITHIN_5CM, fuse, meets_targets, save_outputs
 from utilities.config import get_settings
 from utilities.environment import package_versions
 from utilities.experiment import close_run, log_artifact, log_metrics, log_params, open_run, set_tags, start_run
 
 EXPERIMENT = "phase0-pipeline"
-HEARTBEAT_SECONDS = 10.0
+
+
+class StepFailed(RuntimeError):
+    """A step failure that a retry cannot fix (bad input, a failed gate); Airflow fails the task without retrying."""
+
+
+class GateFailed(StepFailed):
+    """A point cloud missed the Phase 0 targets."""
+
+
+# Bad input or missing data: retrying will not help.
+NON_RETRYABLE: tuple[type[BaseException], ...] = (StepFailed, FileNotFoundError, ValueError)
 
 
 @dataclass
 class StepContext:
-    """Which DAG step an activity runs and the parent MLflow run its child run goes under."""
+    """Which DAG step runs and the parent MLflow run its child run goes under."""
 
     step: str
     depends_on: list[str]
@@ -115,7 +126,6 @@ class GateInput:
     clouds: list[PointcloudResult] = field(default_factory=list)
 
 
-@activity.defn
 def open_pipeline_run(data: OpenRunInput) -> str | None:
     """Open the pipeline's parent MLflow run with the DAG attached; returns its run ID."""
     tags = {"basir.pipeline": data.pipeline, "basir.workflow_id": data.workflow_id, "basir.status": "running"}
@@ -128,13 +138,11 @@ def open_pipeline_run(data: OpenRunInput) -> str | None:
         )
 
 
-@activity.defn
 def close_pipeline_run(data: CloseRunInput) -> None:
     """Record the pipeline's outcome on its parent run and end it."""
     close_run(data.run_id, failed=not data.succeeded, tags={"basir.status": _status(data.succeeded)})
 
 
-@activity.defn
 def check_env(ctx: StepContext) -> dict[str, str]:
     """Check that the worker has every package and a writable data folder; returns what it found."""
     with _step_run(ctx):
@@ -144,15 +152,14 @@ def check_env(ctx: StepContext) -> dict[str, str]:
         found |= {name: v or "MISSING" for name, v in versions.items()}
         log_params(found | {"data_dir": str(settings.base_data_dir), "mlflow_uri": settings.mlflow_uri})
         if missing := [name for name, v in versions.items() if v is None]:
-            raise ApplicationError(f"missing packages: {', '.join(missing)}", non_retryable=True)
+            raise StepFailed(f"missing packages: {', '.join(missing)}")
         settings.outputs_dir.mkdir(parents=True, exist_ok=True)
         return found
 
 
-@activity.defn
 def prepare_dataset(data: DatasetInput) -> PreparedDataset:
     """Find the dataset on disk, downloading and indexing it first if needed."""
-    with _heartbeats(), _step_run(data.ctx, data.dataset):
+    with _step_run(data.ctx, data.dataset):
         try:
             root = dataset_dir(data.dataset)
             downloaded = False
@@ -165,10 +172,9 @@ def prepare_dataset(data: DatasetInput) -> PreparedDataset:
         return PreparedDataset(dataset=data.dataset, path=str(root), frames=frames)
 
 
-@activity.defn
 def replay(data: ReplayInput) -> ReplayResult:
     """Play the sequence headless and record frame rate and depth coverage."""
-    with _heartbeats(), _step_run(data.ctx, data.prepared.dataset):
+    with _step_run(data.ctx, data.prepared.dataset):
         source = TUMDatasetSource(Path(data.prepared.path), stride=data.stride, max_frames=data.max_frames)
         log_params(
             {
@@ -184,10 +190,9 @@ def replay(data: ReplayInput) -> ReplayResult:
         return ReplayResult(data.prepared.dataset, stats.frames, stats.fps, stats.depth_valid_pct)
 
 
-@activity.defn
 def pointcloud(data: PointcloudInput) -> PointcloudResult:
     """Fuse the sequence into one cloud, score its depth consistency and save the cloud files."""
-    with _heartbeats(), _step_run(data.ctx, data.prepared.dataset):
+    with _step_run(data.ctx, data.prepared.dataset):
         root = Path(data.prepared.path)
         source = TUMDatasetSource(root, stride=data.every, max_frames=data.max_frames)
         log_params(
@@ -217,7 +222,6 @@ def pointcloud(data: PointcloudInput) -> PointcloudResult:
         )
 
 
-@activity.defn
 def gate(data: GateInput) -> list[str]:
     """Pass only if every point cloud meets the Phase 0 targets; returns the datasets checked.
 
@@ -228,9 +232,9 @@ def gate(data: GateInput) -> list[str]:
         failures = [_describe(c) for c in data.clouds if not meets_targets(c.median_cm, c.within_5cm)]
         log_metrics({"clouds": len(data.clouds), "passed": float(bool(data.clouds) and not failures)})
         if not data.clouds:
-            raise ApplicationError("gate received no point clouds", type="GateFailed", non_retryable=True)
+            raise GateFailed("gate received no point clouds")
         if failures:
-            raise ApplicationError(f"Phase 0 gate failed: {'; '.join(failures)}", type="GateFailed", non_retryable=True)
+            raise GateFailed(f"Phase 0 gate failed: {'; '.join(failures)}")
         return [c.dataset for c in data.clouds]
 
 
@@ -262,20 +266,74 @@ def _step_run(ctx: StepContext, dataset: str | None = None) -> Iterator[None]:
             set_tags({"basir.status": _status(succeeded)})
 
 
-@contextmanager
-def _heartbeats(every: float = HEARTBEAT_SECONDS) -> Iterator[None]:
-    """Heartbeat from a background thread while the activity runs long blocking calls."""
-    done = threading.Event()
-    context = contextvars.copy_context()
+# ------------------------------------------------------------------------------
+# Running a step by name
+# ------------------------------------------------------------------------------
 
-    def beat() -> None:
-        while not done.wait(every):
-            context.run(activity.heartbeat)
 
-    thread = threading.Thread(target=beat, name="heartbeat", daemon=True)
-    thread.start()
+def execute(task: str, payload: dict[str, Any]) -> Any:
+    """Run the step behind Airflow task `task` and return its result as JSON-ready data.
+
+    `payload` holds the run's `params`, the `parent_run_id`, and what the task received from
+    upstream: `workflow_id` (open), `succeeded` (close), `dataset` (prepare), `prepared` (replay:
+    the list of every prepared dataset; pointcloud: one), `clouds` (gate).
+    """
+    params = Phase0Params.from_dict(payload.get("params"))
+    dag = phase0_dag(params.datasets)
+    parent = payload.get("parent_run_id") or None  # "" = MLflow tracking was off when the run opened
+    if task == OPEN_TASK:
+        run_id = open_pipeline_run(
+            OpenRunInput(PIPELINE, str(payload["workflow_id"]), dag.to_json(), dag.to_mermaid(), params.as_dict())
+        )
+        return {"parent_run_id": run_id, "datasets": params.datasets}
+    if task == CLOSE_TASK:
+        close_pipeline_run(CloseRunInput(parent, bool(payload["succeeded"])))
+        return None
+    if task == "check_env":
+        return check_env(_context(dag, "check_env", parent))
+    if task == "prepare_dataset":
+        dataset = str(payload["dataset"])
+        return asdict(prepare_dataset(DatasetInput(_context(dag, f"prepare_dataset:{dataset}", parent), dataset)))
+    if task == "replay":
+        step = next(s for s in dag.steps if s.activity == "replay")
+        prepared = next(PreparedDataset(**p) for p in payload["prepared"] if p["dataset"] == step.dataset)
+        ctx = _context(dag, step.name, parent)
+        return asdict(replay(ReplayInput(ctx, prepared, params.replay_stride, params.replay_speed, params.max_frames)))
+    if task == "pointcloud":
+        prepared = PreparedDataset(**payload["prepared"])
+        ctx = _context(dag, f"pointcloud:{prepared.dataset}", parent)
+        options = (params.every, params.pixel_stride, params.voxel, params.gap, params.max_frames)
+        return asdict(pointcloud(PointcloudInput(ctx, prepared, *options)))
+    if task == "gate":
+        clouds = [PointcloudResult(**c) for c in payload["clouds"]]
+        gate(GateInput(_context(dag, "gate", parent), clouds))
+        return [asdict(c) for c in clouds]  # what passed, for `run_pipeline.py --wait`
+    raise ValueError(f"phase0 has no task '{task}'")
+
+
+def run_locally(params: Phase0Params, workflow_id: str) -> dict[str, Any]:
+    """Run the whole pipeline in this process, step by step in DAG order, as Airflow would; returns each result.
+
+    The parent run is closed either way; a failing step's exception propagates.
+    """
+    base: dict[str, Any] = {"params": asdict(params)}
+    opened = execute(OPEN_TASK, base | {"workflow_id": workflow_id})
+    base["parent_run_id"] = opened["parent_run_id"]
+    results: dict[str, Any] = {}
+    succeeded = False
     try:
-        yield
+        results["check_env"] = execute("check_env", base)
+        prepared = [execute("prepare_dataset", base | {"dataset": d}) for d in params.datasets]
+        results["prepare_dataset"] = prepared
+        results["replay"] = execute("replay", base | {"prepared": prepared})
+        clouds = [execute("pointcloud", base | {"prepared": p}) for p in prepared]
+        results["pointcloud"] = clouds
+        results["gate"] = execute("gate", base | {"clouds": clouds})
+        succeeded = True
     finally:
-        done.set()
-        thread.join()
+        execute(CLOSE_TASK, base | {"succeeded": succeeded})
+    return results
+
+
+def _context(dag: Dag, name: str, parent_run_id: str | None) -> StepContext:
+    return StepContext(name, list(dag.step(name).depends_on), parent_run_id)
