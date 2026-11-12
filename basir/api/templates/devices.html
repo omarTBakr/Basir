@@ -42,7 +42,9 @@
     const qr = qrcode(0, "M");
     qr.addData(box.dataset.text);
     qr.make();
-    box.innerHTML = qr.createSvgTag({ cellSize: 4, margin: 2, scalable: true });
+    // Parsed as SVG (XML), not assigned to innerHTML; scripts in parsed documents never run.
+    const svg = new DOMParser().parseFromString(qr.createSvgTag({ cellSize: 4, margin: 2, scalable: true }), "image/svg+xml");
+    box.replaceChildren(document.importNode(svg.documentElement, true));
   });
 </script>
 {% endblock %}

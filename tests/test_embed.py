@@ -1,4 +1,4 @@
-"""Tests for basir/api/embed.py: the frameable proxy forwards everything and drops only frame-blocking headers."""
+"""Tests for basir/api/embed.py: the proxy forwards requests and lets only the Console frame the page."""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ import threading
 from fastapi.testclient import TestClient
 import pytest
 
-from basir.api.embed import create_proxy_app
+from basir.api.embed import create_proxy_app, frame_ancestors
 
 
 @pytest.fixture
@@ -44,16 +44,17 @@ def upstream() -> Iterator[str]:
         server.server_close()
 
 
-def test_proxy_strips_frame_headers_and_keeps_the_rest(upstream: str) -> None:
-    with TestClient(create_proxy_app(upstream)) as client:
+def test_proxy_rewrites_frame_headers_and_keeps_the_rest(upstream: str) -> None:
+    with TestClient(create_proxy_app(upstream, console_port=8000)) as client:
         response = client.get("/_app/x.js?v=1")
         assert response.status_code == 200
         assert response.text == f"path=/_app/x.js?v=1 host={upstream.removeprefix('http://')}"
-        assert "x-frame-options" not in response.headers and "content-security-policy" not in response.headers
+        assert "x-frame-options" not in response.headers
+        assert response.headers["content-security-policy"] == frame_ancestors(8000)
         assert response.headers.get_list("set-cookie") == ["a=1", "b=2"]
 
         redirect = client.get("/old", follow_redirects=False)
-        assert redirect.status_code == 302 and redirect.headers["location"] == "http://testserver/new"
+        assert redirect.status_code == 302 and redirect.headers["location"] == "/new"
 
 
 def test_unreachable_upstream_is_a_502() -> None:

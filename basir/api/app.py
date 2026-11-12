@@ -5,6 +5,11 @@
 The lifespan starts the GPU worker process and the batcher, and stops them (and the live
 map fusion tasks) on shutdown. `basir.api.ingest.create_ingest_app` serves the phone
 stream alone, sharing this app's state.
+
+Security: the Console trusts only loopback. `TrustedHostMiddleware` refuses any other Host
+(DNS rebinding) and `OriginGuard` refuses cross-origin WebSockets and POSTs, so a website open
+in the laptop's browser can neither watch `/ws/view`, feed `/ws/stream` nor post to the
+Devices or map APIs (docs/09-server-and-ui.md, "Security").
 """
 
 from __future__ import annotations
@@ -24,12 +29,11 @@ from basir.api.devices import DeviceRegistry
 from basir.api.framebus import InProcessFrameBus
 from basir.api.ingest import IngestState
 from basir.api.mapping import MapManager
-from basir.api.metrics import HTTPMetricsMiddleware
-from basir.api.middleware import RequestIDMiddleware
+from basir.api.middleware import LOOPBACK_HOSTS, TEST_HOSTS, add_standard_middleware
 from basir.api.mlflow_view import MLflowView
 from basir.api.pairing import PairingRequests
 from basir.api.temporal_view import TemporalView
-from basir.api.tokens import TokenStore
+from basir.api.tokens import DEFAULT_TTL_DAYS, TokenStore
 from basir.api.viewer import LatestFrames
 from basir.api.worker import InferenceBackend, ProcessBackend
 from utilities.config import Settings, get_settings
@@ -46,9 +50,9 @@ def create_app(settings: Settings | None = None, backend: InferenceBackend | Non
         bus = InProcessFrameBus(settings.ingest_queue_size)
         devices = DeviceRegistry()
         maps = MapManager(settings)
-        app.state.ingest = IngestState(
-            bus, devices, engine.device, LatestFrames(), maps, TokenStore(settings.devices_file), PairingRequests()
-        )
+        # TOKEN_TTL_DAYS: read when Settings has the field (utilities/config.py), else 30 days.
+        tokens = TokenStore(settings.devices_file, getattr(settings, "token_ttl_days", DEFAULT_TTL_DAYS))
+        app.state.ingest = IngestState(bus, devices, engine.device, LatestFrames(), maps, tokens, PairingRequests())
         batcher = Batcher(bus, engine, devices.deliver, settings.batch_max_size, settings.batch_max_wait_ms / 1000)
         task = asyncio.create_task(batcher.run())
         try:
@@ -64,8 +68,7 @@ def create_app(settings: Settings | None = None, backend: InferenceBackend | Non
     app.state.settings = settings
     app.state.mlflow = MLflowView(settings.mlflow_uri, settings.mlflow_ui_url)
     app.state.temporal = TemporalView(settings.temporal_address, settings.temporal_ui_url)
-    app.add_middleware(HTTPMetricsMiddleware)
-    app.add_middleware(RequestIDMiddleware)  # added last, so it runs first and wraps the metrics
+    add_standard_middleware(app, trusted_hosts=[*LOOPBACK_HOSTS, *TEST_HOSTS])
     app.include_router(metrics.router)
     app.include_router(ingest.router)
     app.include_router(viewer.router)

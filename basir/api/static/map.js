@@ -145,7 +145,7 @@ async function openRun(runId) {
   closeSocket(); clearPoints();
   if (!runId) return;
   hud.textContent = "Loading saved run…";
-  const response = await fetch(`/api/map/runs/${runId}/cloud`);
+  const response = await fetch(`/api/map/runs/${encodeURIComponent(runId)}/cloud`);
   if (!response.ok) { hud.textContent = `Could not load the run (${response.status})`; return; }
   append(...unpack(await response.arrayBuffer()));
   hud.textContent = `saved run · ${$("run").selectedOptions[0].textContent} · ${count.toLocaleString()} points`;
@@ -166,20 +166,30 @@ function openFile(file) {
   reader.readAsArrayBuffer(file);
 }
 
+// Fill a <select> from server data without HTML parsing (device and run names are untrusted).
+function fillSelect(select, items, empty) {
+  const list = items.length ? items : [{ value: "", label: empty }];
+  select.replaceChildren(...list.map((it) => {
+    const o = document.createElement("option");
+    o.value = it.value; o.textContent = it.label; o.selected = !!it.selected;
+    return o;
+  }));
+}
+
 async function refreshDevices() {
   try {
     const live = await (await fetch("/api/live")).json();
     const names = [...new Set([...live.devices.map((d) => d.device), ...(await (await fetch("/api/map/sessions")).json()).map((s) => s.device)])];
     if (!device && names.length) { device = names[0]; if (source === "live") openLive(); }
     const options = names.includes(device) || !device ? names : [device, ...names];
-    $("device").innerHTML = options.length ? options.map((n) => `<option ${n === device ? "selected" : ""}>${n}</option>`).join("") : '<option value="">–</option>';
+    fillSelect($("device"), options.map((n) => ({ value: n, label: n, selected: n === device })), "–");
   } catch (e) { /* server restarting */ }
 }
 
 async function refreshRuns() {
   const runs = await (await fetch("/api/map/runs")).json();
-  $("run").innerHTML = '<option value="">–</option>' + runs.map((r) =>
-    `<option value="${r.run_id}">${r.name}${r.points ? ` · ${Math.round(r.points).toLocaleString()} pts` : ""}</option>`).join("");
+  fillSelect($("run"), [{ value: "", label: "–" }, ...runs.map((r) =>
+    ({ value: String(r.run_id), label: `${r.name}${r.points ? ` · ${Math.round(r.points).toLocaleString()} pts` : ""}` }))], "–");
 }
 
 function setSource(next) {

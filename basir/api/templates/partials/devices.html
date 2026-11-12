@@ -84,12 +84,15 @@
 
 <h2>Paired phones</h2>
 {% if paired %}
+{% set token_info = request.app.state.ingest.tokens.entries() %}
 <div class="table-wrap"><table>
-  <thead><tr><th>Phone</th><th>Paired</th><th>Status</th><th></th></tr></thead>
+  <thead><tr><th>Phone</th><th>Paired</th><th>Token expires</th><th>Status</th><th></th></tr></thead>
   <tbody>
   {% for device, created in paired.items() %}
+  {% set info = token_info.get(device) %}
   <tr>
     <td>{{ device }}</td><td class="muted">{{ created | ago }}</td>
+    <td class="muted" data-expires="{{ info.expires_at if info else '' }}">{% if info and info.expired() %}{{ badge("expired", "failed") }} pair again{% elif info %}{{ info.expires_label() }}{% endif %}</td>
     <td>{% if live.devices | selectattr("device", "equalto", device) | list %}{{ badge("streaming", "ok") }}{% else %}{{ badge("offline", "") }}{% endif %}</td>
     <td><button class="btn" hx-post="/api/devices/{{ device }}/revoke" hx-target="#devices" hx-confirm="Forget {{ device }}? It will have to pair again.">Forget</button></td>
   </tr>

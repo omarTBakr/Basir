@@ -5,8 +5,12 @@ the phone's newest frame for Live views and is offered to its live map; a sender
 that phone's results back on the same socket.
 
 The route is served twice: by the Console (loopback, no token needed) and by the phone-only
-listener on the LAN (`create_ingest_app`), where every phone needs its token
-(`?token=...` or `Authorization: Bearer ...`).
+listener on the LAN (`create_ingest_app`), where every phone needs its token. The token is
+sent as the first WebSocket message, `{"type": "auth", "token": "bsr_..."}`, or as an
+`Authorization: Bearer ...` header; never in the URL, where uvicorn would log it (a `?token=`
+query is refused). On the Console, `OriginGuard` stops browsers on other sites from using
+the tokenless route: browsers always send `Origin` on WebSockets, and only the Console's own
+pages match it; clients with no `Origin` are local programs such as the phone simulator.
 """
 
 from __future__ import annotations
@@ -24,13 +28,14 @@ from fastapi import APIRouter, FastAPI, HTTPException, Request, WebSocket, WebSo
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
+from starlette.websockets import WebSocketState
 
 from basir import __version__
 from basir.api.devices import DeviceRegistry, DeviceSession
 from basir.api.framebus import FrameBus, QueuedFrame
 from basir.api.mapping import MapManager
 from basir.api.metrics import FRAMES_DROPPED, FRAMES_RECEIVED, QUEUE_DEPTH, WS_CONNECTIONS
-from basir.api.middleware import get_request_id
+from basir.api.middleware import add_standard_middleware, get_request_id, ip_or_local_host
 from basir.api.pairing import PairingRequests
 from basir.api.protocol import ProtocolError, decode_frame
 from basir.api.tokens import TokenStore
@@ -41,6 +46,7 @@ logger = logging.getLogger("basir.ingest")
 DEVICE_ID = re.compile(r"^[A-Za-z0-9._-]{1,64}$")
 POLICY_VIOLATION = 1008  # WebSocket close codes
 TRY_AGAIN_LATER = 1013
+AUTH_TIMEOUT_S = 10.0  # a LAN client must send its auth message this soon after connecting
 PHONE_PAGE = Path(__file__).parent / "phone"
 JPEG_MAGIC = b"\xff\xd8"
 
@@ -73,6 +79,9 @@ def create_ingest_app(console: FastAPI) -> FastAPI:
     app = FastAPI(title="Basir ingest", version=__version__, docs_url=None, redoc_url=None, openapi_url=None)
     app.state.console = console
     app.state.require_token = True
+    # Any IP literal as Host (phones connect by LAN address), no domain names (DNS rebinding);
+    # cross-site POSTs and WebSockets are refused.
+    add_standard_middleware(app, allowed_host=ip_or_local_host)
     app.include_router(router)
     app.mount("/phone", StaticFiles(directory=PHONE_PAGE), name="phone")
 
@@ -97,7 +106,9 @@ def create_ingest_app(console: FastAPI) -> FastAPI:
             pending = state.pairing.open(ask.device, ask.label or ask.device, address)
         except ValueError as e:
             raise HTTPException(429, str(e)) from e
-        logger.info("Phone %s (%s) asks to pair, code %s", ask.device, address, pending.code)
+        logger.info(
+            "Phone %s (%s) asks to pair, code %s (request %s)", ask.device, address, pending.code, get_request_id()
+        )
         return {"request_id": pending.id, "code": pending.code, "status": "pending"}
 
     @app.get("/pair/{request_id}")
@@ -123,9 +134,24 @@ def _state(websocket: WebSocket) -> IngestState | None:
     return getattr(owner.state, "ingest", None)
 
 
-def _token(websocket: WebSocket) -> str | None:
+def _bearer(websocket: WebSocket) -> str | None:
     auth = websocket.headers.get("authorization", "")
-    return auth[7:].strip() if auth.lower().startswith("bearer ") else websocket.query_params.get("token")
+    return auth[7:].strip() if auth.lower().startswith("bearer ") else None
+
+
+async def _auth_message(websocket: WebSocket) -> str | None:
+    """The token from the first message, `{"type": "auth", "token": "..."}`, or None (wrong shape, timeout)."""
+    try:
+        message = await asyncio.wait_for(websocket.receive(), AUTH_TIMEOUT_S)
+    except TimeoutError:
+        return None
+    try:
+        body = json.loads(message.get("text") or "")
+    except ValueError:
+        return None
+    if not isinstance(body, dict) or body.get("type") != "auth" or not isinstance(body.get("token"), str):
+        return None
+    return body["token"]
 
 
 @router.websocket("/ws/stream/{device_id}")
@@ -135,15 +161,17 @@ async def stream(websocket: WebSocket, device_id: str) -> None:
     if state is None:
         await websocket.close(TRY_AGAIN_LATER, "server is starting")
         return
-    if getattr(websocket.app.state, "require_token", False) and not state.tokens.verify(device_id, _token(websocket)):
-        logger.warning("Refused phone %s: missing or wrong token", device_id)
-        await websocket.close(POLICY_VIOLATION, "missing or wrong device token")
+    if not DEVICE_ID.match(device_id):
+        await websocket.close(POLICY_VIOLATION, "invalid device id")
         return
-    session = state.devices.connect(device_id) if DEVICE_ID.match(device_id) else None
+    if getattr(websocket.app.state, "require_token", False) and not await _authenticate(websocket, state, device_id):
+        return
+    session = state.devices.connect(device_id)
     if session is None:
-        await websocket.close(POLICY_VIOLATION, "invalid or already connected device id")
+        await websocket.close(POLICY_VIOLATION, "device id already connected")
         return
-    await websocket.accept()
+    if websocket.client_state is WebSocketState.CONNECTING:
+        await websocket.accept()
     WS_CONNECTIONS.inc()
     logger.info("Phone %s connected (request %s)", device_id, get_request_id())
     sender = asyncio.create_task(_send_results(websocket, session))
@@ -161,6 +189,24 @@ async def stream(websocket: WebSocket, device_id: str) -> None:
             QUEUE_DEPTH.remove(device_id)
         WS_CONNECTIONS.dec()
         logger.info("Phone %s disconnected after %d frames", device_id, session.received)
+
+
+async def _authenticate(websocket: WebSocket, state: IngestState, device_id: str) -> bool:
+    """Check the device token (Bearer header before accepting, else the first message); close with 1008 if wrong."""
+    if "token" in websocket.query_params:
+        logger.warning("Refused phone %s: token in the URL (request %s)", device_id, get_request_id())
+        await websocket.close(POLICY_VIOLATION, "send the token as the first message, not in the URL")
+        return False
+    bearer = _bearer(websocket)
+    if bearer is None:
+        await websocket.accept()
+    token = bearer if bearer is not None else await _auth_message(websocket)
+    if state.tokens.verify(device_id, token):
+        return True
+    logger.warning("Refused phone %s: missing, wrong or expired token (request %s)", device_id, get_request_id())
+    with suppress(RuntimeError):  # the client may already have gone
+        await websocket.close(POLICY_VIOLATION, "missing, wrong or expired device token")
+    return False
 
 
 async def _receive_frames(websocket: WebSocket, state: IngestState, session: DeviceSession) -> None:

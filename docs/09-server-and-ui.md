@@ -19,7 +19,7 @@ On start-up the app spawns the GPU worker and waits until its model is loaded, t
 
 | Listener | Address | Serves |
 |---|---|---|
-| Console | `127.0.0.1:8000` | Every page, `/metrics`, the Live and map sockets, and `/ws/stream` **without** a token (local test clients) |
+| Console | `127.0.0.1:8000` | Every page, `/metrics`, the Live and map sockets, and `/ws/stream` **without** a token for local programs (the simulator); browsers on other sites are refused (see [Security](#security)) |
 | Phones | `INGEST_HOST:INGEST_PORT` (`0.0.0.0:8001`), HTTPS | Only the phone page (`/`), pairing (`/pair`), `/ws/stream/{device_id}` (token required) and `/healthz` |
 | MLflow UI | `127.0.0.1:8002` | A frameable copy of MLflow for the Experiments tab |
 | Temporal UI | `127.0.0.1:8003` | A frameable copy of the Temporal UI for the Pipelines tab |
@@ -41,13 +41,29 @@ Nothing is installed on the phone: the phone listener serves a **phone page** th
 
 **Pose and depth from WebXR.** The page converts WebXR's camera (y up, looking down -z) to Basir's camera convention (y down, z forward), takes the intrinsics from the view's projection matrix, and samples depth on a 160-column grid aligned with the colour image, in millimetres. WebXR's world is y-up: set *World up axis* to **Y (ARCore)** in the 3D map.
 
-**Tokens.** Only a token's SHA-256 hash is stored, in `<DATA_DIR>/devices.json` (git-ignored). The phone sends it as `?token=...` or `Authorization: Bearer ...`; a missing or wrong token is closed with code **1008**. **Forget** on the Devices tab revokes it. *Advanced: pair by hand* creates a token for a client that can't ask to pair.
+**Tokens.** Only a token's SHA-256 hash is stored, in `<DATA_DIR>/devices.json` (git-ignored), with when it was made and when it expires (`TOKEN_TTL_DAYS`, default 30; the Devices tab shows it). The phone sends it as the first WebSocket message, `{"type": "auth", "token": "bsr_..."}`, or as `Authorization: Bearer ...`; a missing, wrong or expired token is closed with code **1008** and the phone pairs again. **Forget** on the Devices tab revokes it. *Advanced: pair by hand* creates a token for a client that can't ask to pair.
 
 **Which network.** The phone joins the same Wi-Fi as the laptop: the router the laptop is on, or a hotspot the laptop shares. The Devices tab shows one QR code per network the laptop is on, and the certificate covers every one of those addresses.
 
 **Firewall.** On Fedora, a hotspot the laptop shares (NetworkManager zone `nm-shared`) blocks its clients until the port is allowed once: `sudo firewall-cmd --zone=nm-shared --add-port=8001/tcp` (add `--permanent` to keep it). For the router's network the Workstation zone already allows high ports; otherwise `sudo firewall-cmd --add-port=8001/tcp`. "This site can't be reached" on the phone means the firewall or the network, not the page.
 
-**Embedded MLflow and Temporal.** Both UIs send `X-Frame-Options: SAMEORIGIN` and load assets from absolute paths, so the Console can neither frame them nor host them under a prefix. Each gets its own loopback port that forwards every request unchanged and strips only `X-Frame-Options` (and a CSP `frame-ancestors`) ([`embed.py`](../basir/api/embed.py)). The MLflow copy runs only when `MLFLOW_TRACKING_URI` is an HTTP server.
+**Embedded MLflow and Temporal.** Both UIs send `X-Frame-Options: SAMEORIGIN` and load assets from absolute paths, so the Console can neither frame them nor host them under a prefix. Each gets its own loopback port that forwards requests and replaces `X-Frame-Options` with a CSP `frame-ancestors` that names only the Console's origins ([`embed.py`](../basir/api/embed.py), see [Security](#security)). The MLflow copy runs only when `MLFLOW_TRACKING_URI` is an HTTP server.
+
+## Security
+
+The Console has no login: it trusts whoever can reach `127.0.0.1`. The checks below keep a website open in the laptop's browser, or another device on the Wi-Fi, from using that trust.
+
+| Threat | Guard |
+|---|---|
+| DNS rebinding (a site's name re-pointed at 127.0.0.1) | The Console and the embed proxies accept only `Host: 127.0.0.1` or `localhost` (`TrustedHostMiddleware`, 400 otherwise). The phone listener accepts any IP literal (phones connect by address), `localhost` and `*.local`, but no other domain name. |
+| A site opening `/ws/view` (camera), `/ws/map` or `/ws/stream`, or posting to pair, revoke, approve, deny, reset or save (CSRF) | `OriginGuard` ([`middleware.py`](../basir/api/middleware.py)) on every listener: a WebSocket handshake or a POST/PUT/PATCH/DELETE whose `Origin` is not the listener's own origin (same host and port as `Host`) is refused (403; `Origin: null` too). Browsers always send `Origin` on WebSockets and cross-origin POSTs, and HTMX posts are same-origin, so the Console keeps working. A request without `Origin` comes from a local program and passes, unless `Sec-Fetch-Site` says another site sent it. |
+| Tokenless `/ws/stream` on the Console | Kept, for the phone simulator and other local programs. Browsers cannot omit `Origin`, so only the Console's own pages could use it from a browser; a local program can already read `devices.json`, so a token would not stop it. Phones always use the LAN listener, where a token is required. |
+| Script injection through device or run names | The Live and 3D map pages build `<select>` options with `textContent`, never `innerHTML`; Jinja escapes everything in the templates. |
+| Clickjacking through the MLflow and Temporal copies | `Content-Security-Policy: frame-ancestors http://127.0.0.1:<console> http://localhost:<console>` replaces the upstream frame headers. The proxies send the upstream its own `Host`, `Origin` and `Referer` and drop `Forwarded`/`X-Forwarded-*`, allow only GET, HEAD, POST, PATCH and DELETE, cap request bodies at 16 MB, and rewrite `Location` to a path on the proxy (a redirect to any other origin becomes `/`). |
+| Tokens in logs | Tokens never travel in the URL (`?token=` is refused), and `scripts/serve.py` adds a filter to uvicorn's loggers that replaces `bsr_...` and `token=...` with `[redacted]`. Both apps give every request a request ID (`RequestIDMiddleware`, echoed as `X-Request-ID` and printed in the pairing, connect and refusal log lines) and record HTTP metrics, so `/pair` shows up in `basir_http_requests`. |
+| Stolen or forgotten phones | Tokens expire after `TOKEN_TTL_DAYS` (default 30); **Forget** revokes one at once. The token file is written under a lock to a unique temp file and swapped in with `os.replace`, so concurrent pairing and revoking never lose an entry. |
+
+**File permissions.** `devices.json` and the TLS key are given mode `0600`, but on the NTFS data drive (`ntfs3`, mounted `uid=1000` with no permission mapping) `chmod` does nothing and every local user who can read the mount can read them. There is no separate setting for their location yet; `DATA_DIR` moves them, but also moves datasets and outputs. Until `DEVICES_FILE` / `CERTS_DIR` settings exist, keep the whole `DATA_DIR` on the NVMe (ext4/btrfs) if other people use the laptop.
 
 ## Tabs
 
