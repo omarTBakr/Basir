@@ -8,6 +8,7 @@ import numpy as np
 import pytest
 
 from basir.core.types import CameraIntrinsics, Frame
+from basir.ingest import playback
 from basir.ingest.playback import Pacer, PlaybackStats, play
 
 INTR = CameraIntrinsics(1.0, 1.0, 0.5, 0.5, 2, 2)
@@ -17,38 +18,77 @@ def _frame(depth: np.ndarray | None) -> Frame:
     return Frame(id=0, timestamp=0.0, rgb=np.zeros((2, 2, 3), np.uint8), intrinsics=INTR, depth=depth)
 
 
-def test_pacer_follows_timestamps() -> None:
+class FakeClock:
+    """Stands in for the `time` module inside playback: sleeping only advances the clock."""
+
+    def __init__(self) -> None:
+        self.now = 1000.0
+        self.slept: list[float] = []
+
+    def perf_counter(self) -> float:
+        return self.now
+
+    def sleep(self, seconds: float) -> None:
+        self.slept.append(seconds)
+        self.now += seconds
+
+
+@pytest.fixture
+def clock(monkeypatch: pytest.MonkeyPatch) -> FakeClock:
+    fake = FakeClock()
+    monkeypatch.setattr(playback, "time", fake)
+    return fake
+
+
+def test_pacer_follows_timestamps(clock: FakeClock) -> None:
     pacer = Pacer(speed=1.0)
-    start = time.perf_counter()
     for t in (100.0, 100.05, 100.10):
         pacer.wait(t)
-    assert time.perf_counter() - start == pytest.approx(0.10, abs=0.04)
+    assert clock.now - 1000.0 == pytest.approx(0.10)
+    assert clock.slept == pytest.approx([0.05, 0.05])
 
 
-def test_pacer_speed_and_no_wait() -> None:
+def test_pacer_does_not_wait_when_behind(clock: FakeClock) -> None:
+    pacer = Pacer(speed=1.0)
+    pacer.wait(0.0)
+    clock.now += 0.5  # the caller took longer than the frame interval
+    pacer.wait(0.1)
+    assert clock.slept == []
+
+
+def test_pacer_speed_and_no_wait(clock: FakeClock) -> None:
     fast = Pacer(speed=4.0)
-    start = time.perf_counter()
     fast.wait(0.0)
     fast.wait(0.2)
-    assert time.perf_counter() - start == pytest.approx(0.05, abs=0.03)
+    assert clock.slept == pytest.approx([0.05])
 
     instant = Pacer(speed=0)
-    start = time.perf_counter()
     instant.wait(0.0)
     instant.wait(10.0)
-    assert time.perf_counter() - start < 0.01
+    assert clock.slept == pytest.approx([0.05])  # no new sleep
 
 
-def test_paused_time_is_excluded() -> None:
+def test_paused_time_is_excluded(clock: FakeClock) -> None:
     pacer = Pacer(speed=1.0)
     pacer.wait(0.0)
     pacer.pause()
-    time.sleep(0.08)
+    clock.now += 0.08
     paused_elapsed = pacer.elapsed
-    time.sleep(0.02)
+    clock.now += 0.02
     assert pacer.elapsed == pytest.approx(paused_elapsed)  # frozen while paused
     pacer.resume()
-    assert pacer.elapsed < 0.05
+    assert pacer.elapsed == pytest.approx(0.0)
+    clock.now += 0.03
+    assert pacer.elapsed == pytest.approx(0.03)
+
+
+def test_pacer_really_sleeps() -> None:
+    """One real-clock check with a generous bound (the fake-clock tests cover the arithmetic)."""
+    pacer = Pacer(speed=1.0)
+    start = time.perf_counter()
+    pacer.wait(0.0)
+    pacer.wait(0.05)
+    assert time.perf_counter() - start >= 0.045
 
 
 def test_stats() -> None:

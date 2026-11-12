@@ -68,7 +68,14 @@ class VoxelMap:
             setattr(self, name, new)
 
     def insert(self, points: np.ndarray, colours: np.ndarray) -> np.ndarray:
-        """Add world points (N x 3) with uint8 colours (N x 3); return the new voxels' indices."""
+        """Add world points (N x 3) with uint8 colours (N x 3); return the new voxels' indices.
+
+        Non-finite points (NaN/Inf from a bad pose or depth) are dropped: cast to int64 they would
+        become arbitrary voxel keys.
+        """
+        finite = np.isfinite(points).all(axis=1)
+        if not finite.all():
+            points, colours = points[finite], colours[finite]
         if len(points) == 0:
             return np.zeros(0, np.int64)
         cells = np.floor(points / self.voxel).astype(np.int64) + _OFFSET

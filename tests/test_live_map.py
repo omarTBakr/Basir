@@ -50,3 +50,13 @@ def test_voxel_map_grows_past_its_initial_buffer_and_respects_the_budget() -> No
     assert len(new) == len(vmap) == 3000 < len(grid)
     assert len(vmap.insert(grid + 0.05, np.zeros_like(grid, dtype=np.uint8))) == 0  # budget reached
     assert len(vmap.insert(np.zeros((0, 3)), np.zeros((0, 3), np.uint8))) == 0
+
+
+def test_voxel_map_drops_non_finite_points() -> None:
+    vmap = VoxelMap(voxel=0.1, max_points=100)
+    points = np.array([[0.05, 0.05, 0.05], [np.nan, 0.0, 0.0], [np.inf, 1.0, 1.0], [1.05, 0.05, 0.05]])
+    new = vmap.insert(points, np.full((4, 3), 100, np.uint8))
+    assert len(new) == 2 and len(vmap) == 2
+    xyz, _ = vmap.points()
+    assert np.isfinite(xyz).all()
+    assert len(vmap.insert(np.full((3, 3), np.nan), np.zeros((3, 3), np.uint8))) == 0

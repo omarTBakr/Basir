@@ -4,6 +4,9 @@ Conventions (used everywhere in Basir):
     * Camera frame: OpenCV / TUM optical frame, x right, y down, z forward (metres).
     * Pose: T_world_cam, the 4x4 transform taking camera-frame points to the world frame.
     * Depth: float32 metres, 0 means "no reading".
+    * Raw depth scale: `CameraIntrinsics.depth_scale` is raw units per metre (metres = raw / depth_scale,
+      TUM 5000). The phone wire format uses the inverse, metres per unit (ARCore 0.001);
+      `basir.ingest.phone_frame` is the one place that converts between them.
 """
 
 from __future__ import annotations
@@ -25,7 +28,7 @@ class CameraIntrinsics:
     cy: float
     width: int
     height: int
-    depth_scale: float = 5000.0  # raw depth value / depth_scale = metres (TUM: 5000)
+    depth_scale: float = 5000.0  # raw units per metre: raw / depth_scale = metres (TUM 5000, ARCore 1000)
 
     @property
     def K(self) -> np.ndarray:

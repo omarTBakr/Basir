@@ -51,6 +51,7 @@ def test_render_shapes(toy: Path) -> None:
     assert canvas.shape == (48, 128, 3)
 
 
+@pytest.mark.slow
 def test_visualize_pointcloud_headless(toy: Path, tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     import open3d as o3d
 
@@ -81,6 +82,7 @@ def test_visualize_pointcloud_headless(toy: Path, tmp_path: Path, capsys: pytest
     }
 
 
+@pytest.mark.slow
 def test_simulate_phones_against_a_live_server(toy: Path, live_server: str, capsys: pytest.CaptureFixture[str]) -> None:
     argv = ["2", "--dataset", str(toy), "--fps", "20", "--duration", "1", "--url", live_server]
     assert simulate_phones.main(argv) == 0

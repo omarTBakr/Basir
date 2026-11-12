@@ -13,7 +13,7 @@ import time
 
 from basir.api.framebus import FrameBus, QueuedFrame
 from basir.api.metrics import BATCH_SIZE, FRAME_LATENCY, INFERENCE_SECONDS, QUEUE_DEPTH
-from basir.api.worker import InferenceBackend
+from basir.api.worker import InferenceBackend, WorkerDown
 
 logger = logging.getLogger("basir.batcher")
 
@@ -45,6 +45,7 @@ class Batcher:
         self.deliver = deliver
         self.max_size = max_size
         self.max_wait = max_wait
+        self.skipped = 0  # batches skipped while the worker was down
 
     async def run(self) -> None:
         """Batch forever (until cancelled)."""
@@ -60,9 +61,17 @@ class Batcher:
         sent = time.perf_counter()
         try:
             inference_s = await self.backend.infer([f.jpeg for f in batch])
+        except WorkerDown:  # the backend already logged the death once; do not add a traceback per batch
+            if self.skipped == 0:
+                logger.warning("GPU worker is down: skipping batches until it is back")
+            self.skipped += 1
+            return
         except Exception:
             logger.exception("Batch of %d frames failed", len(batch))
             return
+        if self.skipped:
+            logger.info("GPU worker is back after %d skipped batches", self.skipped)
+            self.skipped = 0
         done = time.perf_counter()
         BATCH_SIZE.observe(len(batch))
         INFERENCE_SECONDS.observe(inference_s)

@@ -21,11 +21,13 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
 from basir.api.framebus import QueuedFrame
 from basir.api.metrics import VIEWERS
+from basir.api.protocol import valid_device_id
 from basir.api.rgbd import decode_depth, depth_png
 
 COLOUR_TAG, DEPTH_TAG = b"C", b"D"
 DEFAULT_DEPTH_MAX_M = 3.0
 IDLE_STATS_S = 1.0  # stats are sent at least this often, even without new frames
+POLICY_VIOLATION = 1008  # WebSocket close code
 
 router = APIRouter()
 
@@ -52,7 +54,10 @@ class LatestFrames:
 
 @router.websocket("/ws/view/{device_id}")
 async def view(websocket: WebSocket, device_id: str) -> None:
-    """Stream one phone's colour and depth to a browser, at most VIEW_MAX_FPS."""
+    """Stream one phone's colour and depth to a browser, at most VIEW_MAX_FPS (invalid ids: closed, 1008)."""
+    if not valid_device_id(device_id):
+        await websocket.close(POLICY_VIOLATION, "invalid device id")
+        return
     state = websocket.app.state.ingest
     settings = websocket.app.state.settings
     await websocket.accept()

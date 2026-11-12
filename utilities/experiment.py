@@ -29,7 +29,7 @@ from typing import Any
 import mlflow
 from mlflow.tracking import MlflowClient
 
-from utilities.config import get_settings
+from utilities.config import Settings, get_settings
 
 logger = logging.getLogger("basir.experiment")
 
@@ -43,18 +43,22 @@ def start_run(
     run_name: str | None = None,
     tags: dict[str, str] | None = None,
     parent_run_id: str | None = None,
+    settings: Settings | None = None,
 ) -> Iterator[str | None]:
     """Open an MLflow run in `experiment`; yields the run ID (None if MLflow is unavailable).
 
     With `parent_run_id` the run is nested under that run. The run ends FAILED if the block raises.
+    `settings` picks the MLflow store (default: the global `get_settings()`); an app built with
+    its own Settings passes them so it logs where it reads.
     """
+    settings = settings or get_settings()
     run = None
     try:
         run = mlflow.start_run(
-            experiment_id=_experiment_id(experiment),
+            experiment_id=_experiment_id(experiment, settings),
             run_name=run_name,
             parent_run_id=parent_run_id,
-            tags={**_standard_tags(), **(tags or {})},
+            tags={**_standard_tags(settings), **(tags or {})},
         )
         _state.active = True
     except Exception as e:
@@ -79,9 +83,10 @@ def open_run(
 ) -> str | None:
     """Create a run that stays open after this call returns; finish it with `close_run`. Returns its ID or None."""
     try:
-        client = MlflowClient(get_settings().mlflow_uri)
+        settings = get_settings()
+        client = MlflowClient(settings.mlflow_uri)
         run_id = client.create_run(
-            _experiment_id(experiment), run_name=run_name, tags={**_standard_tags(), **(tags or {})}
+            _experiment_id(experiment, settings), run_name=run_name, tags={**_standard_tags(settings), **(tags or {})}
         ).info.run_id
     except Exception as e:
         _warn(f"MLflow tracking disabled for this run: {e}")
@@ -139,9 +144,8 @@ def log_artifact(path: str | Path, artifact_path: str | None = None) -> None:
         _safe(mlflow.log_artifact, str(path), artifact_path)
 
 
-def _artifact_location() -> str | None:
+def _artifact_location(settings: Settings) -> str | None:
     """None for a tracking server (it stores artifacts itself), else the local mlartifacts/ folder."""
-    settings = get_settings()
     if settings.mlflow_uri.startswith(("http://", "https://")):
         return None
     settings.mlflow_artifacts_dir.mkdir(parents=True, exist_ok=True)
@@ -152,22 +156,20 @@ def _is_active() -> bool:
     return getattr(_state, "active", False)
 
 
-def _experiment_id(name: str) -> str:
+def _experiment_id(name: str, settings: Settings) -> str:
     """Point MLflow at the configured store and return the experiment's ID, creating it if needed."""
-    settings = get_settings()
     mlflow.set_tracking_uri(settings.mlflow_uri)
     if (found := mlflow.get_experiment_by_name(name)) is not None:
         return found.experiment_id
-    return mlflow.create_experiment(name, artifact_location=_artifact_location())
+    return mlflow.create_experiment(name, artifact_location=_artifact_location(settings))
 
 
-def _standard_tags() -> dict[str, str]:
+def _standard_tags(settings: Settings) -> dict[str, str]:
     """git commit and dirty flag, Basir version, GPU name: enough to reproduce a run."""
     import torch
 
     from basir import __version__
 
-    settings = get_settings()
     tags = {"basir_version": __version__, "device": settings.effective_device}
     try:
         tags["git_commit"] = _git(settings.project_root, "rev-parse", "--short", "HEAD") or "none"

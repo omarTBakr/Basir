@@ -25,6 +25,7 @@ import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from fastapi import FastAPI
 import uvicorn
 
 from basir.api.app import create_app
@@ -59,7 +60,7 @@ def main(argv: list[str] | None = None) -> int:
     settings = get_settings()
     console = create_app(settings)
 
-    def server(app: object, host: str, port: int, name: str, tls: tuple[Path, Path] | None = None) -> uvicorn.Server:
+    def server(app: FastAPI, host: str, port: int, name: str, tls: tuple[Path, Path] | None = None) -> uvicorn.Server:
         logger.info("%-11s %s://%s:%d", name, "https" if tls else "http", host, port)
         cert, key = tls if tls else (None, None)
         config = uvicorn.Config(

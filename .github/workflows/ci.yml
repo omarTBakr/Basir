@@ -49,6 +49,8 @@ jobs:
           version: ${{ env.UV_VERSION }}
           enable-cache: true
           cache-dependency-glob: uv.lock
+      - name: System libraries for open3d and OpenCV
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libegl1 libgl1 libgomp1
       - name: uv sync --frozen (CPU torch)
         run: .github/scripts/sync-cpu-env.sh
       - name: pytest
@@ -58,13 +60,10 @@ jobs:
           mkdir -p "$BASIR_DATA_DIR"
           uv run pytest -q
 
-  # Non-blocking until the existing errors are fixed (missing tqdm stubs in utilities/utility.py and an
-  # observe() overload mismatch in utilities/tracing.py). Drop continue-on-error once mypy is clean.
   mypy:
-    name: mypy (non-blocking)
+    name: mypy
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    continue-on-error: true
     env:
       UV_NO_SYNC: "1"
     steps:
@@ -76,5 +75,5 @@ jobs:
           cache-dependency-glob: uv.lock
       - name: uv sync --frozen (CPU torch)
         run: .github/scripts/sync-cpu-env.sh
-      - name: mypy basir utilities
-        run: uvx mypy@1.19.0 --python-executable .venv/bin/python basir utilities
+      - name: mypy basir utilities scripts # version and settings from pyproject.toml ([tool.mypy], dev group)
+        run: uv run --no-sync mypy basir utilities scripts

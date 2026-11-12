@@ -49,6 +49,7 @@ def test_visits_are_remembered() -> None:
     assert visit is not None and visit[0] == "192.168.1.23" and visit[1] < 5
 
 
+@pytest.mark.slow
 def test_phone_pairs_over_the_lan_listener_then_streams(lan_server: LanServer) -> None:
     phone, console = httpx.Client(base_url=lan_server.phone_url), httpx.Client(base_url=lan_server.console_url)
     page = phone.get("/")

@@ -7,6 +7,7 @@ from pathlib import Path
 
 import pytest
 
+from utilities.config import Settings, get_settings
 import utilities.experiment as experiment
 from utilities.experiment import (
     close_run,
@@ -109,22 +110,32 @@ def test_open_run_with_broken_tracking_returns_none(clean_env: pytest.MonkeyPatc
 def test_run_url_only_for_tracking_servers(mlflow_store: str, clean_env: pytest.MonkeyPatch) -> None:
     from types import SimpleNamespace
 
-    from utilities.config import get_settings
-
     assert run_url("abc") is None  # local SQLite store
-    clean_env.setenv("BASIR_MLFLOW_TRACKING_URI", "http://127.0.0.1:5000/")
+    clean_env.setenv("BASIR_MLFLOW_TRACKING_URI", "http://mlflow.test:5000/")
     get_settings.cache_clear()
     run = SimpleNamespace(info=SimpleNamespace(experiment_id="7"))
     clean_env.setattr(experiment, "MlflowClient", lambda uri: SimpleNamespace(get_run=lambda run_id: run))
-    assert run_url("abc") == "http://127.0.0.1:5000/#/experiments/7/runs/abc"
+    assert run_url("abc") == "http://mlflow.test:5000/#/experiments/7/runs/abc"
 
 
 def test_artifact_location_is_local_for_sqlite(tmp_path: Path, mlflow_store: str) -> None:
-    assert experiment._artifact_location() == (tmp_path / "mlartifacts").as_uri()
+    assert experiment._artifact_location(get_settings()) == (tmp_path / "mlartifacts").as_uri()
 
 
 def test_artifact_location_is_left_to_a_tracking_server(tmp_path: Path, clean_env: pytest.MonkeyPatch) -> None:
     clean_env.setenv("BASIR_DATA_DIR", str(tmp_path))
-    clean_env.setenv("BASIR_MLFLOW_TRACKING_URI", "http://127.0.0.1:5000")
-    assert experiment._artifact_location() is None
+    clean_env.setenv("BASIR_MLFLOW_TRACKING_URI", "http://mlflow.test:5000")
+    assert experiment._artifact_location(get_settings()) is None
     assert not (tmp_path / "mlartifacts").exists()
+
+
+def test_explicit_settings_choose_the_store(tmp_path: Path, mlflow_store: str) -> None:
+    """An app built with its own Settings logs there, not to the global store."""
+    from mlflow.tracking import MlflowClient
+
+    (tmp_path / "own").mkdir()
+    own = Settings(_env_file=tmp_path / "none.env", data_dir=str(tmp_path / "own"))
+    with start_run("own-exp", run_name="mine", settings=own) as run_id:
+        assert run_id
+    assert MlflowClient(own.mlflow_uri).get_run(run_id).info.run_name == "mine"
+    assert MlflowClient(mlflow_store).get_experiment_by_name("own-exp") is None

@@ -15,7 +15,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from functools import lru_cache
 import logging
-from typing import Any, TypeVar
+from typing import Any, TypeVar, cast
 
 from utilities.config import get_settings
 
@@ -52,7 +52,11 @@ def observe(name: str | None = None, *, as_type: str | None = None, capture: boo
             return func
         from langfuse import observe as langfuse_observe
 
-        return langfuse_observe(func, name=name, as_type=as_type, capture_input=capture, capture_output=capture)
+        # as_type is checked by Langfuse at runtime; its Literal type is not re-exported, hence the cast.
+        decorate = langfuse_observe(
+            name=name, as_type=cast(Any, as_type), capture_input=capture, capture_output=capture
+        )
+        return decorate(func)
 
     return decorator
 

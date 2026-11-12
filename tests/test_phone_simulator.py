@@ -36,6 +36,7 @@ def test_depth_is_downsized_like_arcore(tmp_path: Path) -> None:
     assert frames[0].depth is not None and len(frames[0].depth) == 32 * 24 * 2
 
 
+@pytest.mark.slow
 def test_two_phones_stream_and_get_results(live_server: str, toy_frames: list) -> None:
     results = asyncio.run(simulate(live_server, 2, toy_frames, fps=20, duration=1.0))
     assert [s.device for s in results] == ["phone-1", "phone-2"]

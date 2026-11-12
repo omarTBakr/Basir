@@ -23,6 +23,25 @@ from utilities.config import ENV_PREFIX, Settings, get_settings
 UNREACHABLE = "127.0.0.1:1"  # nothing listens on port 1
 
 
+@pytest.fixture(autouse=True)
+def isolated_settings(monkeypatch: pytest.MonkeyPatch, tmp_path_factory: pytest.TempPathFactory) -> Iterator[None]:
+    """Every test: no env/.env, MLflow in a throwaway SQLite file, data in a temporary folder.
+
+    So no test can reach the developer's real MLflow server or data drive, even one that
+    forgets `clean_env`. Tests that need a fully clean environment still use `clean_env`
+    (which removes these too); tests may override any of them with monkeypatch.
+    """
+    data = tmp_path_factory.mktemp("basir-data")
+    monkeypatch.setenv("ENV_FILE", os.devnull)
+    monkeypatch.setenv("BASIR_DATA_DIR", str(data))
+    monkeypatch.setenv("BASIR_MLFLOW_TRACKING_URI", f"sqlite:///{data / 'mlflow.db'}")
+    for plain in ("DATA_DIR", "MLFLOW_TRACKING_URI"):  # BASIR_ wins anyway; keep the env unambiguous
+        monkeypatch.delenv(plain, raising=False)
+    get_settings.cache_clear()
+    yield
+    get_settings.cache_clear()
+
+
 @pytest.fixture
 def clean_env(monkeypatch: pytest.MonkeyPatch) -> Iterator[pytest.MonkeyPatch]:
     """Remove every env var Settings reads (plain and BASIR_-prefixed) and reset the cache.
