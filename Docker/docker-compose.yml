@@ -1,4 +1,4 @@
-# Basir local stack: experiment tracking, workflow engine and monitoring.
+# Basir local stack: experiment tracking, pipeline orchestration (Airflow) and monitoring.
 #
 #   scripts/stack.sh up       # start (creates env/stack.env on first run)
 #   scripts/stack.sh status   # URLs, container health, Prometheus targets
@@ -16,8 +16,8 @@ name: basir
 include:
   - postgres/compose.yml
   - mlflow/compose.yml
-  - temporal/compose.yml
-  - temporal-ui/compose.yml
+  - airflow/compose.yml
+  - statsd-exporter/compose.yml
   - node-exporter/compose.yml
   - gpu-exporter/compose.yml
   - postgres-exporter/compose.yml

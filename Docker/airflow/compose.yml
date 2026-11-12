@@ -1,0 +1,132 @@
+# Apache Airflow 3 (LocalExecutor): runs Basir's pipelines from dags/. UI and REST API on 127.0.0.1:8080.
+#
+#   airflow-init           one-shot: creates the `airflow` database if missing, migrates it
+#   airflow-api-server     web UI, REST API (/api/v2) and the Execution API the tasks report to
+#   airflow-scheduler      schedules DAG runs and runs tasks (LocalExecutor, at most 4 at once)
+#   airflow-dag-processor  parses dags/
+#   airflow-triggerer      runs deferred tasks (none yet; part of Airflow 3's standard layout)
+#
+# Metadata lives in the `airflow` database on the stack's Postgres, logs in the airflow-logs
+# volume, metrics go to statsd-exporter (scraped by Prometheus). Basir's code (basir/,
+# utilities/, dags/) is mounted read-only at /opt/basir, so code changes need no rebuild;
+# datasets/ and outputs/ are mounted at their host paths (BASIR_DATA_DIR, exported by
+# scripts/stack.sh), so paths logged to MLflow are valid on the host too.
+
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: 10m
+    max-file: "3"
+
+x-airflow: &airflow
+  build:
+    context: ../..
+    dockerfile: Docker/airflow/Dockerfile
+  image: basir/airflow:3.3.2
+  restart: unless-stopped
+  logging: *logging
+  user: "${HOST_UID:-50000}:0"  # the desktop user, so outputs/ stays writable; group 0 as the image expects
+  environment:
+    AIRFLOW__CORE__EXECUTOR: LocalExecutor
+    AIRFLOW__CORE__PARALLELISM: "4"
+    AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+    AIRFLOW__CORE__DAGS_FOLDER: /opt/basir/dags
+    AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: "false"
+    AIRFLOW__CORE__FERNET_KEY: ${AIRFLOW_FERNET_KEY:?set AIRFLOW_FERNET_KEY in env/stack.env}
+    AIRFLOW__CORE__EXECUTION_API_SERVER_URL: http://airflow-api-server:8080/execution/
+    AIRFLOW__CORE__SIMPLE_AUTH_MANAGER_USERS: admin:admin
+    AIRFLOW__CORE__SIMPLE_AUTH_MANAGER_PASSWORDS_FILE: /opt/airflow/simple_auth_manager_passwords.json
+    AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${AIRFLOW_DB_HOST:-postgres}:${AIRFLOW_DB_PORT:-5432}/airflow
+    AIRFLOW__API__SECRET_KEY: ${AIRFLOW_API_SECRET_KEY:?set AIRFLOW_API_SECRET_KEY in env/stack.env}
+    AIRFLOW__API_AUTH__JWT_SECRET: ${AIRFLOW_JWT_SECRET:?set AIRFLOW_JWT_SECRET in env/stack.env}
+    AIRFLOW__SCHEDULER__ENABLE_HEALTH_CHECK: "true"
+    AIRFLOW__METRICS__STATSD_ON: "true"
+    AIRFLOW__METRICS__STATSD_HOST: statsd-exporter
+    AIRFLOW__METRICS__STATSD_PORT: "9125"
+    AIRFLOW__METRICS__STATSD_INFLUXDB_ENABLED: "true"  # dag_id, task_id, state as tags -> Prometheus labels
+    AIRFLOW__METRICS__LEGACY_NAMES_ON: "false"
+    AIRFLOW_ADMIN_PASSWORD: ${AIRFLOW_ADMIN_PASSWORD:?set AIRFLOW_ADMIN_PASSWORD in env/stack.env}
+    POSTGRES_USER: ${POSTGRES_USER}
+    POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    AIRFLOW_DB_HOST: ${AIRFLOW_DB_HOST:-postgres}
+    AIRFLOW_DB_PORT: ${AIRFLOW_DB_PORT:-5432}
+    # Basir's settings inside the steps (BASIR_* wins over everything else)
+    BASIR_DATA_DIR: ${BASIR_DATA_DIR:?run through scripts/stack.sh, which exports BASIR_DATA_DIR}
+    BASIR_MLFLOW_TRACKING_URI: ${AIRFLOW_MLFLOW_TRACKING_URI:-http://mlflow:5000}
+    BASIR_DEVICE: cpu
+  volumes:
+    - ../../dags:/opt/basir/dags:ro
+    - ../../basir:/opt/basir/basir:ro
+    - ../../utilities:/opt/basir/utilities:ro
+    - type: bind
+      source: ${BASIR_DATA_DIR}/datasets
+      target: ${BASIR_DATA_DIR}/datasets
+    - type: bind
+      source: ${BASIR_DATA_DIR}/outputs
+      target: ${BASIR_DATA_DIR}/outputs
+    - airflow-logs:/opt/airflow/logs
+
+x-after-init: &after-init
+  airflow-init:
+    condition: service_completed_successfully
+
+services:
+  airflow-init:
+    <<: *airflow
+    restart: "no"
+    command: init
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  airflow-api-server:
+    <<: *airflow
+    command: api-server
+    depends_on: *after-init
+    ports:
+      - 127.0.0.1:8080:8080
+    healthcheck:
+      test: [CMD, curl, -fsS, http://127.0.0.1:8080/api/v2/monitor/health]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 90s
+
+  airflow-scheduler:
+    <<: *airflow
+    command: scheduler
+    depends_on:
+      <<: *after-init
+      airflow-api-server:
+        condition: service_healthy
+    healthcheck:
+      test: [CMD, curl, -fsS, http://127.0.0.1:8974/health]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 60s
+
+  airflow-dag-processor:
+    <<: *airflow
+    command: dag-processor
+    depends_on: *after-init
+    healthcheck:
+      test: [CMD-SHELL, 'airflow jobs check --job-type DagProcessorJob --hostname "$${HOSTNAME}"']
+      interval: 30s
+      timeout: 30s
+      retries: 10
+      start_period: 60s
+
+  airflow-triggerer:
+    <<: *airflow
+    command: triggerer
+    depends_on: *after-init
+    healthcheck:
+      test: [CMD-SHELL, 'airflow jobs check --job-type TriggererJob --hostname "$${HOSTNAME}"']
+      interval: 30s
+      timeout: 30s
+      retries: 10
+      start_period: 60s
+
+volumes:
+  airflow-logs:
