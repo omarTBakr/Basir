@@ -91,7 +91,7 @@ Basir/
 │       ├── viewer.py               # /ws/view/{device_id}: live colour + depth
 │       ├── mapping.py              # /ws/map/{device_id}, /api/map/*: live voxel maps, idle eviction, save
 │       ├── pairing.py              # pairing requests (phone asks, Devices tab approves)
-│       ├── tokens.py               # per-phone tokens (SHA-256 hashes on disk)
+│       ├── tokens.py               # per-phone tokens (SHA-256 hashes on disk, TOKEN_TTL_DAYS expiry)
 │       ├── tls.py                  # self-signed certificate for the phone listener
 │       ├── lan.py                  # LAN / hotspot addresses for the QR codes
 │       ├── devices_page.py         # the Devices tab
@@ -99,7 +99,7 @@ Basir/
 │       ├── embed.py                # frameable loopback proxies of the MLflow and Temporal UIs
 │       ├── tabs.py                 # tab registry: sidebar, routes, "coming later" pages
 │       ├── metrics.py              # Prometheus metrics, HTTP timing, /metrics
-│       ├── middleware.py           # request IDs (HTTP + WebSocket)
+│       ├── middleware.py           # request IDs, Host/Origin checks, log redaction
 │       ├── mlflow_view.py          # MLflow layer: running, latest per experiment, pipelines
 │       ├── temporal_view.py        # running / recent Temporal workflows
 │       ├── dag.py                  # dag.json parsing and SVG layout
