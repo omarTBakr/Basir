@@ -1,14 +1,16 @@
 """Where received frames wait for the GPU worker: one small latest-frame-wins queue per phone.
 
-`FrameBus` is the seam: the in-process asyncio version below serves one server; a
-Redis Streams version can replace it later without touching the WebSocket or batching code.
+`FrameBus` is the seam: the in-process asyncio version below serves one server; a Redis
+Streams version can replace it later. `put`, `depth` and `remove` are synchronous and called
+inline by the ingest socket, so such a version would buffer locally or make them async.
 """
 
 from __future__ import annotations
 
 import asyncio
 from collections import deque
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+import time
 from typing import Protocol
 
 from basir.api.protocol import FrameHeader
@@ -21,8 +23,10 @@ class QueuedFrame:
     device: str
     header: FrameHeader
     jpeg: bytes
-    received_at: float  # time.perf_counter() on receipt
+    received_at: float  # time.perf_counter() on receipt (for latency; not a wall-clock time)
     depth: bytes | None = None  # uint16 depth described by header.depth (protocol v2)
+    received_wall: float = field(default_factory=time.time)  # server wall clock on receipt (header.timestamp
+    # is the phone's own clock, e.g. performance.now(), so it cannot say when a frame arrived)
 
 
 class FrameBus(Protocol):

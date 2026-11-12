@@ -34,7 +34,7 @@ def _ago(value: datetime | None) -> str:
     """'42 s ago', '5 min ago', '3 h ago' or a date."""
     if value is None:
         return "-"
-    seconds = (datetime.now(UTC) - value).total_seconds()
+    seconds = max(0.0, (datetime.now(UTC) - value).total_seconds())  # clock skew: never "-5 s ago"
     if seconds < 90:
         return f"{seconds:.0f} s ago"
     if seconds < 5400:
@@ -65,7 +65,10 @@ templates.env.globals.update(
 
 
 def live_stats(request: Request) -> dict[str, Any]:
-    """Per-phone ingest statistics plus the worker and batching settings."""
+    """Per-phone ingest statistics plus the worker and batching settings.
+
+    Reads event-loop-owned state, so only call it from `async def` handlers (never a threadpool `def`).
+    """
     state: IngestState = request.app.state.ingest
     settings = request.app.state.settings
     return {
@@ -133,12 +136,12 @@ async def _local_mlflow() -> ServiceStatus:
 
 
 @router.get("/partials/live")
-def live_partial(request: Request) -> HTMLResponse:
+async def live_partial(request: Request) -> HTMLResponse:
     return templates.TemplateResponse(request, "partials/live.html", live_stats(request))
 
 
 @router.get("/api/live")
-def live_api(request: Request) -> dict[str, Any]:
+async def live_api(request: Request) -> dict[str, Any]:
     return live_stats(request)
 
 
