@@ -47,7 +47,7 @@ An already prepared folder is left alone (`--overwrite` redoes it); a half-extra
 Notes:
 
 - **Datasets are big and git-ignored.** They go to `datasets/` (or `$DATA_DIR/datasets`). The two Phase 0 sequences are versioned with DVC instead, see [Data versioning](04-data-versioning.md).
-- **A preset that isn't downloaded yet** makes `replay.py`, `visualize_pointcloud.py` and `simulate_phones.py` stop with the exact download command to run. The Temporal pipeline downloads it itself.
+- **A preset that isn't downloaded yet** makes `replay.py`, `visualize_pointcloud.py` and `simulate_phones.py` stop with the exact download command to run. The Airflow pipeline downloads it itself.
 
 ## Presets
 
