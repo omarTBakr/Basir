@@ -51,7 +51,8 @@ def test_results_are_routed_to_the_sending_phone(client: TestClient) -> None:
         live = client.get("/api/live").json()
         assert {d["device"] for d in live["devices"]} == {"route-a", "route-b"}
         assert live["worker_device"] == "fake"
-    assert client.get("/api/live").json()["devices"] == []  # both disconnected
+    # Both disconnected: the handlers' cleanup runs on the server loop just after the sockets close.
+    wait_until(lambda: client.get("/api/live").json()["devices"] == [])
 
 
 def test_latest_frame_wins_while_the_worker_is_busy(client: TestClient, backend: FakeBackend) -> None:
