@@ -46,6 +46,9 @@ DESK, ROOM = "fr1/desk", "fr1/room"
 _offline = False  # set once the test-server download has failed, so later tests skip straight to the CLI
 
 
+pytestmark = pytest.mark.slow  # the Temporal test server (downloaded on first use) and real workflows
+
+
 async def _environment() -> WorkflowEnvironment:
     global _offline
     if not _offline:

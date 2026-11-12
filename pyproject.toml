@@ -19,6 +19,7 @@ dependencies = [
     "opencv-python>=5.0.0.93",
     "prometheus-client>=0.26.0",
     "pydantic>=2.14.3",
+    "python-multipart>=0.0.20",
     "temporalio>=1.35.0",
     "torch>=2.15.0",
     "tqdm>=4.70.1",
@@ -29,17 +30,23 @@ dependencies = [
 [dependency-groups]
 dev = [
     "dvc>=3.67.1",
-    "httpx2>=2.16.0",
+    "httpx2>=2.16.0",  # starlette.testclient imports it (plain httpx is its deprecated fallback)
+    "mypy>=1.19.0",
     "pre-commit>=4.7.0",
     "pytest>=9.2.0",
     "ruff==0.15.4",
     "scipy>=1.18.1",
+    "types-tqdm>=4.67.0",
 ]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
-markers = ["network: hits the internet (deselected by default; run with -m network)"]
+markers = [
+    "network: hits the internet (deselected by default; run with -m network)",
+    "slow: spawns processes, servers or downloads; runs by default, skip with -m 'not network and not slow'",
+    "gpu: needs a CUDA GPU (none do yet; reserved for Phase 1 perception tests)",
+]
 addopts = "-m 'not network' -p no:dash"
 filterwarnings = [
     # raised inside MLflow's own SQLAlchemy store, not Basir code
@@ -55,3 +62,13 @@ select = ["E", "F", "W", "I", "B", "UP", "SIM", "RUF"]
 
 [tool.ruff.lint.isort]
 force-sort-within-sections = true
+
+[tool.mypy]
+python_version = "3.12"
+warn_unused_ignores = true
+warn_redundant_casts = true
+check_untyped_defs = true
+
+# Every third-party package imported by basir/, utilities/ and scripts/ ships type information
+# (py.typed or stubs; tqdm via types-tqdm), so no ignore_missing_imports is needed. Add an
+# override here, per module, only for a new dependency that has none.
