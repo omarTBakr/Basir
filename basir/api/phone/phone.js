@@ -55,10 +55,11 @@
   let ws = null, seq = 0, sent = 0, sentTimes = [], busy = false;
   function openSocket() {
     return new Promise((resolve, reject) => {
-      const url = `wss://${location.host}/ws/stream/${encodeURIComponent(device)}?token=${encodeURIComponent(store.get("basir-token"))}`;
+      // The token goes in the first message, never in the URL (URLs end up in server logs).
+      const url = `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/ws/stream/${encodeURIComponent(device)}`;
       const socket = new WebSocket(url);
       socket.binaryType = "arraybuffer";
-      socket.onopen = () => resolve(socket);
+      socket.onopen = () => { socket.send(JSON.stringify({ type: "auth", token: store.get("basir-token") || "" })); resolve(socket); };
       socket.onerror = () => reject(new Error("connection failed"));
       socket.onmessage = (e) => {
         const m = JSON.parse(e.data);
@@ -67,7 +68,7 @@
       socket.onclose = (e) => {
         if (ws !== socket) return;
         stop();
-        if (e.code === 1008) { store.del("basir-token"); fail("The laptop no longer knows this phone. Tap Try again to pair it again."); }
+        if (e.code === 1008) { store.del("basir-token"); fail("The laptop no longer knows this phone, or its token expired. Tap Try again to pair it again."); }
         else fail(`The connection closed (${e.code}). Tap Try again.`);
       };
     });

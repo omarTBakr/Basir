@@ -48,9 +48,12 @@
       const names = live.devices.map((d) => d.device);
       if (!device && names.length) { device = names[0]; connect(); }
       const options = names.includes(device) || !device ? names : [device, ...names];
-      select.innerHTML = options.length
-        ? options.map((n) => `<option ${n === device ? "selected" : ""}>${n}</option>`).join("")
-        : '<option value="">No phone connected</option>';
+      // Built with textContent, never innerHTML: device names come from the server.
+      select.replaceChildren(...(options.length ? options : [""]).map((n) => {
+        const o = document.createElement("option");
+        o.value = n; o.textContent = n || "No phone connected"; o.selected = !!n && n === device;
+        return o;
+      }));
     } catch (e) { /* server restarting */ }
   }
 

@@ -106,12 +106,18 @@ async def run_phone(
     fps: float,
     duration: float,
     delay: float = 0.0,
+    token: str | None = None,
 ) -> PhoneStats:
-    """Stream `frames` (looping) at `fps` for `duration` seconds; fps <= 0 sends as fast as possible."""
+    """Stream `frames` (looping) at `fps` for `duration` seconds; fps <= 0 sends as fast as possible.
+
+    `token` (for the LAN listener) is sent as the first message, `{"type": "auth", "token": ...}`.
+    """
     stats = PhoneStats(device)
     sent_at: dict[int, float] = {}
     await asyncio.sleep(delay)
     async with connect(f"{base_url.rstrip('/')}/ws/stream/{device}", max_size=None) as ws:
+        if token is not None:
+            await ws.send(json.dumps({"type": "auth", "token": token}))
         receiver = asyncio.create_task(_receive(ws, stats, sent_at))
         start = time.perf_counter()
         seq = 0

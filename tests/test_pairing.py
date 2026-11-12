@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import httpx
 import pytest
-from websockets.exceptions import InvalidStatus
+from websockets.exceptions import ConnectionClosed, InvalidStatus
 from websockets.sync.client import connect
 
 from basir.api.pairing import MAX_PENDING, PairingRequests
@@ -68,11 +69,16 @@ def test_phone_pairs_over_the_lan_listener_then_streams(lan_server: LanServer) -
     assert "Start streaming on the phone" in console.get("/partials/devices").text
 
     ws_url = lan_server.phone_url.replace("http://", "ws://")
-    refused = ("/ws/stream/realme-14", "/ws/stream/realme-14?token=wrong", f"/ws/stream/other?token={answer['token']}")
-    for bad in refused:
-        with pytest.raises(InvalidStatus):
-            connect(ws_url + bad).close()
-    with connect(f"{ws_url}/ws/stream/realme-14?token={answer['token']}") as ws:
+    with pytest.raises(InvalidStatus):  # a token in the URL is refused before the handshake
+        connect(f"{ws_url}/ws/stream/realme-14?token={answer['token']}").close()
+    for device, token in (("realme-14", "wrong"), ("other", answer["token"])):
+        with connect(f"{ws_url}/ws/stream/{device}") as ws:
+            ws.send(json.dumps({"type": "auth", "token": token}))
+            with pytest.raises(ConnectionClosed) as closed:
+                ws.recv(timeout=5)
+            assert closed.value.rcvd is not None and closed.value.rcvd.code == 1008
+    with connect(f"{ws_url}/ws/stream/realme-14") as ws:
+        ws.send(json.dumps({"type": "auth", "token": answer["token"]}))  # the token is the first message
         ws.send(encode_frame(FrameHeader(seq=0, timestamp=1.0), JPEG))
         assert '"device": "realme-14"' in str(ws.recv())
         assert "is streaming" in console.get("/partials/devices").text  # step 4: done

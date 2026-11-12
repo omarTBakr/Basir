@@ -4,7 +4,8 @@
 Listeners (one process, one shared state):
     127.0.0.1:8000   Console: pages, /metrics, live view and map sockets, /ws/stream without a token
     0.0.0.0:8001     phones only, HTTPS (self-signed): the phone page at /, /pair and
-                     /ws/stream/{device_id}?token=... (INGEST_HOST / INGEST_PORT / INGEST_TLS)
+                     /ws/stream/{device_id} with the token as the first message or a Bearer
+                     header (INGEST_HOST / INGEST_PORT / INGEST_TLS)
     127.0.0.1:8002   MLflow UI, frameable copy for the Experiments tab (MLFLOW_EMBED_PORT)
     127.0.0.1:8003   Temporal UI, frameable copy for the Pipelines tab (TEMPORAL_EMBED_PORT)
 
@@ -32,6 +33,7 @@ from basir.api.app import create_app
 from basir.api.embed import create_proxy_app
 from basir.api.ingest import create_ingest_app
 from basir.api.lan import lan_addresses
+from basir.api.middleware import redact_uvicorn_logs
 from basir.api.tls import ensure_certificate
 from utilities.config import get_settings
 
@@ -57,6 +59,7 @@ def main(argv: list[str] | None = None) -> int:
     logging.basicConfig(
         level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s", datefmt="%H:%M:%S"
     )
+    redact_uvicorn_logs()  # no device token in any uvicorn log line, even from an old `?token=` client
     settings = get_settings()
     console = create_app(settings)
 
@@ -78,10 +81,20 @@ def main(argv: list[str] | None = None) -> int:
             logger.info("Phones open %s://%s:%d", "https" if tls else "http", address, settings.ingest_port)
     if settings.mlflow_ui_url:
         servers.append(
-            server(create_proxy_app(settings.mlflow_ui_url), "127.0.0.1", settings.mlflow_embed_port, "MLflow UI")
+            server(
+                create_proxy_app(settings.mlflow_ui_url, console_port=args.port),
+                "127.0.0.1",
+                settings.mlflow_embed_port,
+                "MLflow UI",
+            )
         )
     servers.append(
-        server(create_proxy_app(settings.temporal_ui_url), "127.0.0.1", settings.temporal_embed_port, "Temporal UI")
+        server(
+            create_proxy_app(settings.temporal_ui_url, console_port=args.port),
+            "127.0.0.1",
+            settings.temporal_embed_port,
+            "Temporal UI",
+        )
     )
     # Ctrl+C reaches one server's signal handler; `serve` then stops the others.
     with suppress(KeyboardInterrupt):
