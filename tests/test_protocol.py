@@ -7,7 +7,14 @@ import struct
 
 import pytest
 
-from basir.api.protocol import FrameHeader, FrameResult, ProtocolError, decode_frame, encode_frame
+from basir.api.protocol import (
+    FrameHeader,
+    FrameResult,
+    ProtocolError,
+    decode_frame,
+    encode_frame,
+    valid_device_id,
+)
 
 JPEG = b"\xff\xd8fake-jpeg\xff\xd9"
 
@@ -62,6 +69,87 @@ def _raw(header: object) -> bytes:
 def test_malformed_messages_are_rejected(message: bytes) -> None:
     with pytest.raises(ProtocolError):
         decode_frame(message)
+
+
+GOOD_INTRINSICS = {"fx": 500.0, "fy": 500.0, "cx": 320.0, "cy": 240.0, "width": 640, "height": 480}
+GOOD_DEPTH = {"width": 4, "height": 3, "scale": 0.001}
+
+
+def _with(**fields: object) -> bytes:
+    """A header-only message (no depth bytes) with `fields` merged into a valid header."""
+    return _raw({"seq": 1, "timestamp": 1.0, **fields})
+
+
+def _depth_message(depth: dict[str, object], depth_bytes: int = 24) -> bytes:
+    payload = json.dumps({"seq": 1, "timestamp": 1.0, "depth": depth, "jpeg_bytes": len(JPEG)}).encode()
+    return struct.pack(">I", len(payload)) + payload + JPEG + b"\x00" * depth_bytes
+
+
+NAN, INF = float("nan"), float("inf")
+
+
+@pytest.mark.parametrize(
+    ("message", "reason"),
+    [
+        (_with(seq=1.5), "fractional seq"),
+        (_with(seq=True), "bool seq"),
+        (_with(seq="3"), "string seq"),
+        (_with(timestamp=NAN), "NaN timestamp"),
+        (_with(timestamp=INF), "infinite timestamp"),
+        (_with(timestamp="now"), "string timestamp"),
+        (_with(pose=[NAN] + [0.0] * 15), "NaN in pose"),
+        (_with(pose=[INF] + [0.0] * 15), "Infinity in pose"),
+        (_with(pose=["1"] + [0.0] * 15), "string in pose"),
+        (_with(intrinsics={**GOOD_INTRINSICS, "fx": 0}), "fx = 0"),
+        (_with(intrinsics={**GOOD_INTRINSICS, "fy": -1}), "negative fy"),
+        (_with(intrinsics={**GOOD_INTRINSICS, "cx": NAN}), "NaN cx"),
+        (_with(intrinsics={**GOOD_INTRINSICS, "width": 0}), "zero colour width"),
+        (_with(intrinsics={**GOOD_INTRINSICS, "height": 480.5}), "fractional colour height"),
+        (_with(intrinsics={**GOOD_INTRINSICS, "width": 5000}), "colour width over the bound"),
+        (_depth_message({**GOOD_DEPTH, "width": -1}, 0), "negative depth width"),
+        (_depth_message({**GOOD_DEPTH, "width": 0}, 0), "zero depth width"),
+        (_depth_message({**GOOD_DEPTH, "height": 1.5}), "fractional depth height"),
+        (_depth_message({**GOOD_DEPTH, "scale": 0}), "zero depth scale"),
+        (_depth_message({**GOOD_DEPTH, "scale": -0.001}), "negative depth scale"),
+        (_depth_message({**GOOD_DEPTH, "scale": NAN}), "NaN depth scale"),
+        (_depth_message({**GOOD_DEPTH, "width": 4097, "height": 1}, 4097 * 2), "depth width over the bound"),
+        (_raw({"seq": 1, "timestamp": 1.0, "depth": GOOD_DEPTH, "jpeg_bytes": True}), "bool jpeg_bytes"),
+    ],
+)
+def test_nonsense_headers_are_rejected(message: bytes, reason: str) -> None:
+    with pytest.raises(ProtocolError):
+        decode_frame(message)
+
+
+def test_the_size_bound_comes_from_the_caller() -> None:
+    message = _depth_message({"width": 64, "height": 2, "scale": 0.001}, 64 * 2 * 2)
+    decode_frame(message)  # within the default bound
+    with pytest.raises(ProtocolError, match="1 to 32"):
+        decode_frame(message, max_side=32)
+
+
+def test_whole_number_floats_are_accepted_as_sizes() -> None:
+    """JavaScript may send 640.0 as 640 or 640.0; both are a whole number."""
+    header, _, depth = decode_frame(_depth_message({"width": 4.0, "height": 3, "scale": 0.001}))
+    assert header.depth == {"width": 4.0, "height": 3.0, "scale": 0.001} and depth is not None
+
+
+@pytest.mark.parametrize(
+    ("device", "ok"),
+    [
+        ("phone-1", True),
+        ("a.b_c", True),
+        ("x" * 64, True),
+        ("", False),
+        ("x" * 65, False),
+        ("../etc", False),
+        ("<script>", False),
+        ("phone 1", False),
+        ("phone-1\n", False),
+    ],
+)
+def test_device_ids(device: str, ok: bool) -> None:
+    assert valid_device_id(device) is ok
 
 
 def test_result_json() -> None:
