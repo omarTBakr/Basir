@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block actions %}
+<div class="spacer"></div>
+<select class="btn" id="device" aria-label="Phone"><option value="">No phone connected</option></select>
+<div class="seg" id="mode">
+  <button type="button" class="on" data-mode="both">Side by side</button><button type="button" data-mode="colour">Colour</button><button type="button" data-mode="depth">Depth</button>
+</div>
+<button class="btn" id="pause" type="button">Pause</button>
+{% endblock %}
+{% block content %}
+<div class="streams" id="streams">
+  <div class="view" id="colour-view">
+    <img id="colour" alt="colour stream">
+    <span class="tag" id="colour-tag">Colour</span><span class="tag right" id="fps-tag"></span>
+    <div class="waiting" id="waiting">Pick a phone. Frames reach this page only while it is open.</div>
+  </div>
+  <div class="view" id="depth-view">
+    <img id="depth" alt="depth stream">
+    <span class="tag" id="depth-tag">Depth</span><span class="tag right" id="range-tag">0 – 3.0 m</span>
+    <div class="waiting" id="no-depth" hidden>This phone sends colour only.</div>
+    <div class="legend"><span>near</span><div class="bar"></div><span>far</span></div>
+  </div>
+</div>
+<div class="card statsbar" id="stats">
+  <span><span class="muted">Received</span> <b data-k="fps">–</b> fps</span>
+  <span><span class="muted">Shown</span> <b data-k="shown_fps">–</b> fps</span>
+  <span><span class="muted">Latency p50</span> <b data-k="latency_p50_ms">–</b> ms</span>
+  <span><span class="muted">Dropped</span> <b data-k="dropped">–</b></span>
+  <span><span class="muted">Queue</span> <b data-k="queue_depth">–</b></span>
+  <span><span class="muted">Pose</span> <b data-k="pose">–</b></span>
+  <span><span class="muted">Depth range</span> <input type="range" id="range" min="0.5" max="10" step="0.5" value="3" style="vertical-align:middle"> <b id="range-label">3.0 m</b></span>
+</div>
+
+<h2>All phones</h2>
+<div hx-get="/partials/live" hx-trigger="load, every 2s" hx-swap="innerHTML"><p class="muted">Loading…</p></div>
+{% endblock %}
+{% block scripts %}
+<script src="{{ url_for('static', path='live.js') }}?v={{ asset_version }}"></script>
+{% endblock %}

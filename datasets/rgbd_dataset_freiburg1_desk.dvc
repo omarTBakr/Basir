@@ -1,0 +1,6 @@
+outs:
+- md5: 43e7a1526ca128e95ecf1853a1cd2c9a.dir
+  size: 367429290
+  nfiles: 1215
+  hash: md5
+  path: rgbd_dataset_freiburg1_desk

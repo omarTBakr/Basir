@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% block head %}
+<script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"></script>
+{% endblock %}
+{% block content %}
+{% if not lan_enabled %}
+<div class="unreachable"><strong>The phone listener is off.</strong> <span class="muted">Restart <code>scripts/serve.py</code> without <code>--no-lan</code>.</span></div>
+{% endif %}
+<div class="devices-grid">
+  <div id="devices" hx-get="/partials/devices" hx-trigger="load, every 2s [!document.querySelector('.token')]" hx-swap="innerHTML">
+    <p class="muted">Loading…</p>
+  </div>
+  <div>
+    {% for net in networks %}
+    <div class="card">
+      {% if net.kind == "hotspot" %}
+      <strong>Phone on this laptop's hotspot</strong>
+      <p class="muted">For a phone joined to the Wi-Fi this laptop shares ({{ net.interface }}). Fedora's firewall blocks hotspot clients until you allow the port once: <code>sudo firewall-cmd --zone=nm-shared --add-port=8001/tcp</code></p>
+      {% else %}
+      <strong>Phone on your router's Wi-Fi</strong>
+      <p class="muted">For a phone on the same router as this laptop ({{ net.interface }}). Scan with the phone's camera app, or open the address in Chrome.</p>
+      {% endif %}
+      <div class="qr" data-text="{{ net.url }}" aria-label="QR code for {{ net.url }}"></div>
+      <p><code>{{ net.url }}</code></p>
+    </div>
+    {% endfor %}
+    <p class="muted" style="font-size:13px">Laptop: {{ laptop }}. Nothing to install on the phone: the page streams from Chrome. Depth and the 3D map need an ARCore phone with Google Play Services for AR; other phones stream colour only.</p>
+    <details class="card advanced">
+      <summary>Advanced: pair by hand</summary>
+      <p class="muted">For a client that can't ask to pair (a script, a test rig): create a token and paste it into the client. It is shown once.</p>
+      <form class="inline" hx-post="/api/devices/pair" hx-target="#devices">
+        <input name="device" placeholder="device id, e.g. rig-1" required pattern="[A-Za-z0-9._\-]{1,64}">
+        <button class="btn" type="submit">Create token</button>
+      </form>
+      <p class="muted" style="margin-top:10px">Stream endpoint: <code>{{ phone_url | replace("https://", "wss://") | replace("http://", "ws://") }}ws/stream/&lt;device-id&gt;?token=…</code></p>
+    </details>
+  </div>
+</div>
+<script>
+  document.querySelectorAll(".qr[data-text]").forEach((box) => {
+    if (typeof qrcode !== "function") { box.textContent = box.dataset.text; return; }
+    const qr = qrcode(0, "M");
+    qr.addData(box.dataset.text);
+    qr.make();
+    // Parsed as SVG (XML), not assigned to innerHTML; scripts in parsed documents never run.
+    const svg = new DOMParser().parseFromString(qr.createSvgTag({ cellSize: 4, margin: 2, scalable: true }), "image/svg+xml");
+    box.replaceChildren(document.importNode(svg.documentElement, true));
+  });
+</script>
+{% endblock %}

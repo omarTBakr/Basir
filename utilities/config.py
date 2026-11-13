@@ -1,10 +1,10 @@
 """Basir settings.
 
 `Settings` holds two kinds of configuration:
-    * Fields: values that can change per machine, read from `.env` and the environment.
+    * Fields: values that can change per machine, read from `env/.env` and the environment.
     * Properties: derived paths and fixed constants.
 
-Precedence, lowest to highest: field default < .env file < <FIELD> env var
+Precedence, lowest to highest: field default < env/.env file < <FIELD> env var
 < BASIR_<FIELD> env var < keyword arguments.
 
 Only what the built phases use lives here; each later phase adds its own settings.
@@ -26,6 +26,9 @@ from utilities.utility import parse_env_file
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
+# Folder (under the project root) holding the settings file .env and the stack's stack.env.
+ENV_DIR = "env"
+
 # Optional environment prefix: BASIR_DEVICE overrides DEVICE.
 ENV_PREFIX = "basir_"
 
@@ -45,9 +48,39 @@ class Settings(BaseModel):
     langfuse_secret_key: str | None = Field(default=None, description="Langfuse secret key")
     langfuse_base_url: str | None = Field(default=None, description="Langfuse URL (default: Langfuse Cloud)")
 
+    # Orchestration: Temporal runs the pipelines
+    temporal_address: str = Field(default="127.0.0.1:7233", description="Temporal frontend host:port")
+
+    # Server and UI: the services it summarises (all optional; shown as "not reachable" when down)
+    grafana_url: str = Field(default="http://127.0.0.1:3000", description="Grafana, embedded on the Dashboards page")
+    prometheus_url: str = Field(default="http://127.0.0.1:9090", description="Prometheus, scrapes /metrics")
+    temporal_ui_url: str = Field(default="http://127.0.0.1:8233", description="Temporal web UI, for deep links")
+
+    # Live ingest: per-phone queues and the GPU worker's micro-batches
+    ingest_queue_size: int = Field(default=2, ge=1, description="Frames kept per phone; older ones are dropped")
+    batch_max_size: int = Field(default=8, ge=1, description="Most frames per GPU batch")
+    batch_max_wait_ms: float = Field(default=20.0, ge=0, description="Longest wait to fill a batch")
+
+    # Console: the phone listener on the LAN, the live view and the live map
+    ingest_host: str = Field(default="0.0.0.0", description="Interface of the phone-only listener (LAN)")
+    ingest_port: int = Field(default=8001, description="Port of the phone-only listener")
+    ingest_tls: bool = Field(default=True, description="HTTPS on the phone listener (phone browsers need it)")
+    mlflow_embed_port: int = Field(default=8002, description="Loopback port that frames the MLflow UI")
+    temporal_embed_port: int = Field(default=8003, description="Loopback port that frames the Temporal UI")
+    view_max_fps: float = Field(default=15.0, gt=0, description="Most frames/s sent to a Live view")
+    map_voxel_m: float = Field(default=0.02, gt=0, description="Live map voxel size in metres")
+    map_keyframe_m: float = Field(default=0.05, ge=0, description="Move this far to fuse a new keyframe")
+    map_keyframe_deg: float = Field(default=5.0, ge=0, description="Or turn this many degrees")
+    map_max_points: int = Field(default=2_000_000, ge=1, description="Voxels kept per live map")
+    map_idle_ttl_s: float = Field(default=600.0, gt=0, description="Free a live map after this long without frames")
+    map_max_sessions: int = Field(default=8, ge=1, description="Most live maps kept at once")
+    ingest_max_image_side: int = Field(default=4096, ge=1, description="Largest image width/height a phone may send")
+    worker_startup_timeout_s: float = Field(default=120.0, gt=0, description="Wait this long for the GPU worker")
+    token_ttl_days: float = Field(default=30.0, gt=0, description="A paired phone's token stops working after this")
+
     def __init__(self, _env_file: Path | str | None = None, **values: Any):
         """Load settings. An explicit `_env_file` is used on its own: if it does not
-        exist, no .env file is read (it never falls back to the project's .env)."""
+        exist, no env file is read (it never falls back to the project's env/.env)."""
         fields = {name.lower(): name for name in type(self).model_fields}
         env_file = Path(_env_file) if _env_file else _default_env_file()
 
@@ -105,6 +138,27 @@ class Settings(BaseModel):
         return self.base_data_dir / "mlartifacts"
 
     @property
+    def devices_file(self) -> Path:
+        """Hashed per-phone tokens (git-ignored)."""
+        return self.base_data_dir / "devices.json"
+
+    @property
+    def certs_dir(self) -> Path:
+        """The phone listener's self-signed certificate (git-ignored)."""
+        return self.base_data_dir / "certs"
+
+    @property
+    def live_map_dir(self) -> Path:
+        """Saved live maps (.ply + trajectory)."""
+        return self.outputs_dir / "live_map"
+
+    @property
+    def mlflow_ui_url(self) -> str | None:
+        """The MLflow web UI for deep links: the tracking URI when it is an HTTP server, else None."""
+        uri = self.mlflow_uri
+        return uri.rstrip("/") if uri.startswith(("http://", "https://")) else None
+
+    @property
     def langfuse_enabled(self) -> bool:
         """Tracing is on only when both Langfuse keys are set."""
         return bool(self.langfuse_public_key and self.langfuse_secret_key)
@@ -148,10 +202,10 @@ class Settings(BaseModel):
 
 
 def _default_env_file() -> Path | None:
-    """$ENV_FILE if set, else <project>/.env if it exists."""
+    """$ENV_FILE if set, else <project>/env/.env if it exists."""
     if os.getenv("ENV_FILE"):
         return Path(os.environ["ENV_FILE"])
-    candidate = PROJECT_ROOT / ".env"
+    candidate = PROJECT_ROOT / ENV_DIR / ".env"
     return candidate if candidate.is_file() else None
 
 

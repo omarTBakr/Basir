@@ -1,0 +1,6 @@
+outs:
+- md5: 2e9f46324e58d558a702b4c0496f580e.dir
+  size: 838104706
+  nfiles: 2729
+  hash: md5
+  path: rgbd_dataset_freiburg1_room

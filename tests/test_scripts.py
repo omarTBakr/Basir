@@ -8,7 +8,7 @@ import numpy as np
 import pytest
 
 from basir.ingest.datasets.toy import create_toy_dataset
-from scripts import replay, visualize_pointcloud
+from scripts import replay, simulate_phones, visualize_pointcloud
 
 
 @pytest.fixture
@@ -51,6 +51,7 @@ def test_render_shapes(toy: Path) -> None:
     assert canvas.shape == (48, 128, 3)
 
 
+@pytest.mark.slow
 def test_visualize_pointcloud_headless(toy: Path, tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     import open3d as o3d
 
@@ -79,3 +80,20 @@ def test_visualize_pointcloud_headless(toy: Path, tmp_path: Path, capsys: pytest
         .tracking.MlflowClient(tracking_uri=f"sqlite:///{tmp_path / 'mlflow.db'}")
         .list_artifacts(run.info.run_id)
     }
+
+
+@pytest.mark.slow
+def test_simulate_phones_against_a_live_server(toy: Path, live_server: str, capsys: pytest.CaptureFixture[str]) -> None:
+    argv = ["2", "--dataset", str(toy), "--fps", "20", "--duration", "1", "--url", live_server]
+    assert simulate_phones.main(argv) == 0
+    out = capsys.readouterr().out
+    assert "phone-1: sent" in out and "phone-2: sent" in out
+
+
+def test_simulate_phones_missing_dataset_fails_cleanly(tmp_path: Path, clean_env: pytest.MonkeyPatch) -> None:
+    clean_env.setenv("BASIR_DATA_DIR", str(tmp_path))
+    assert simulate_phones.main(["2", "--dataset", "fr1/desk"]) == 1
+
+
+def test_simulate_phones_without_a_server_fails_cleanly(toy: Path) -> None:
+    assert simulate_phones.main(["1", "--dataset", str(toy), "--duration", "1", "--url", "ws://127.0.0.1:1"]) == 1

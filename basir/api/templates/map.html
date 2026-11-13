@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block head %}
+<script type="importmap">
+{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+               "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/" } }
+</script>
+{% endblock %}
+{% block actions %}
+<div class="spacer"></div>
+<div class="seg" id="source">
+  <button type="button" class="on" data-source="live">Live session</button><button type="button" data-source="run">Saved run</button><button type="button" data-source="file">Upload .ply</button>
+</div>
+<button class="btn" id="reset" type="button">Reset</button>
+<button class="btn primary" id="save" type="button">Save .ply + MLflow</button>
+<input type="file" id="file" accept=".ply" hidden>
+{% endblock %}
+{% block content %}
+<div class="map-wrap">
+  <div id="map"><div class="hud" id="hud">Waiting for a phone with depth and pose…</div></div>
+  <div class="card controls">
+    <label for="device">Phone</label>
+    <select id="device"><option value="">–</option></select>
+    <label for="run">Saved run</label>
+    <select id="run"><option value="">–</option></select>
+    <label for="psize">Point size</label><input type="range" id="psize" min="1" max="8" value="4">
+    <label for="cmode">Colour</label>
+    <select id="cmode"><option value="rgb">Camera colour</option><option value="height">Height</option></select>
+    <label for="up">World up axis</label>
+    <select id="up"><option value="z">Z (TUM datasets)</option><option value="y">Y (ARCore)</option></select>
+    <label class="check"><input type="checkbox" id="trail" checked> Camera trail</label>
+    <label class="check"><input type="checkbox" id="follow" checked> Follow camera</label>
+    <label>Stats</label>
+    <table>
+      <tr><td>Points</td><td class="n" id="s-points">0</td></tr>
+      <tr><td>Keyframes</td><td class="n" id="s-keyframes">–</td></tr>
+      <tr><td>Fuse time</td><td class="n" id="s-fuse">–</td></tr>
+      <tr><td>Voxel</td><td class="n">{{ (voxel_m * 100) | round(1) }} cm</td></tr>
+    </table>
+    <p class="muted" id="saved" style="font-size:12px; overflow-wrap: anywhere"></p>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script type="module" src="{{ url_for('static', path='map.js') }}?v={{ asset_version }}"></script>
+{% endblock %}

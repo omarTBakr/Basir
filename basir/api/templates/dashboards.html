@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% from "partials/macros.html" import badge %}
+{% block content %}
+<ul class="services">
+  {% for s in services %}
+  <li>{{ badge("up" if s.up else "down", "ok" if s.up else "failed") }} <strong>{{ s.name }}</strong>
+    <span class="muted">{{ s.url }} · {{ s.detail }}</span></li>
+  {% endfor %}
+</ul>
+
+{% if not services[0].up %}
+<div class="unreachable" role="status">
+  <strong>Grafana not reachable.</strong>
+  <span class="muted">Start the infrastructure stack, then reload this page. The frames below stay empty until then.</span>
+</div>
+{% endif %}
+
+<h2>Panels</h2>
+<div class="panels">
+  {% for panel, url in panels %}
+  <figure>
+    <figcaption>{{ panel.title }} <span class="muted">{{ panel.dashboard_uid }} #{{ panel.panel_id }}</span></figcaption>
+    <iframe data-src="{{ url }}" title="{{ panel.title }}" loading="lazy"></iframe>
+  </figure>
+  {% endfor %}
+</div>
+
+<h2>Full dashboards</h2>
+<div class="tabs" role="tablist">
+  {% for d, url in dashboards %}
+  <button type="button" role="tab" data-target="dash-{{ d.uid }}" {% if loop.first %}aria-selected="true"{% endif %}>{{ d.title }}</button>
+  {% endfor %}
+</div>
+{% for d, url in dashboards %}
+<iframe class="dashboard" id="dash-{{ d.uid }}" data-src="{{ url }}" title="{{ d.title }} dashboard" {% if not loop.first %}hidden{% endif %}></iframe>
+{% endfor %}
+
+<script>
+  // Point every Grafana frame at the current theme; re-point on toggle.
+  function themeFrames(theme) {
+    document.querySelectorAll("iframe[data-src]").forEach((f) => {
+      if (!f.hidden || f.src) f.src = f.dataset.src.replace("{theme}", theme);
+    });
+  }
+  themeFrames(document.documentElement.dataset.theme);
+  document.addEventListener("basir:theme", (e) => themeFrames(e.detail));
+  document.querySelectorAll(".tabs button").forEach((tab) => {
+    tab.addEventListener("click", () => {
+      document.querySelectorAll(".tabs button").forEach((t) => t.removeAttribute("aria-selected"));
+      tab.setAttribute("aria-selected", "true");
+      document.querySelectorAll("iframe.dashboard").forEach((f) => { f.hidden = f.id !== tab.dataset.target; });
+      themeFrames(document.documentElement.dataset.theme);
+    });
+  });
+</script>
+{% endblock %}

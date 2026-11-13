@@ -8,7 +8,6 @@ python scripts/check_env.py --langfuse   # also send one smoke trace to Langfuse
 from __future__ import annotations
 
 import argparse
-from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 import platform
 import sys
@@ -16,17 +15,13 @@ import sys
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from utilities.config import get_settings
-
-PACKAGES = ["torch", "numpy", "opencv-python", "open3d", "pydantic", "tqdm", "mlflow", "langfuse"]
+from utilities.environment import package_versions
 
 
 def report_versions() -> None:
     print(f"python        {platform.python_version()} ({sys.executable})")
-    for name in PACKAGES:
-        try:
-            print(f"{name:<13} {version(name)}")
-        except PackageNotFoundError:
-            print(f"{name:<13} MISSING")
+    for name, installed in package_versions().items():
+        print(f"{name:<13} {installed or 'MISSING'}")
 
 
 def report_gpu() -> bool:
@@ -56,7 +51,7 @@ def langfuse_smoke() -> bool:
 
     tracer = get_tracer()
     if tracer is None:
-        print("langfuse      skipped: set LANGFUSE_PUBLIC_KEY and LANGFUSE_SECRET_KEY in .env")
+        print("langfuse      skipped: set LANGFUSE_PUBLIC_KEY and LANGFUSE_SECRET_KEY in env/.env")
         return False
     if not tracer.auth_check():
         print("langfuse      AUTH FAILED: check the keys and LANGFUSE_BASE_URL")

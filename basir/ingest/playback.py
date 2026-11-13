@@ -6,6 +6,7 @@ simulation that replays a recording as if it came from the camera.
 
 from __future__ import annotations
 
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 import time
 
@@ -71,3 +72,24 @@ class PlaybackStats:
     @property
     def depth_valid_pct(self) -> float:
         return 100.0 * self.valid_depth_sum / self.frames if self.frames else 0.0
+
+    def metrics(self) -> dict[str, float]:
+        """The headline numbers, for MLflow."""
+        return {
+            "frames": self.frames,
+            "fps": self.fps,
+            "depth_valid_pct": self.depth_valid_pct,
+            "wall_seconds": self.wall_seconds,
+        }
+
+
+def play(frames: Iterable[Frame], pacer: Pacer, on_frame: Callable[[Frame], bool] | None = None) -> PlaybackStats:
+    """Pace `frames` by their timestamps and count them; `on_frame` returning False stops early."""
+    stats = PlaybackStats()
+    for frame in frames:
+        pacer.wait(frame.timestamp)
+        stats.add(frame)
+        if on_frame is not None and not on_frame(frame):
+            break
+    stats.wall_seconds = pacer.elapsed
+    return stats

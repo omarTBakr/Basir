@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block actions %}
+{% if embed_url %}
+<div class="spacer"></div>
+<div class="seg" id="view-toggle"><button type="button" class="on" data-view="summary">Summary</button><button type="button" data-view="full">Full UI</button></div>
+{% if open_url %}<a class="btn" href="{{ open_url }}" target="_blank" rel="noopener">Open in new tab ↗</a>{% endif %}
+{% endif %}
+{% endblock %}
+{% block content %}
+<div id="summary" hx-get="/partials/{{ page }}" hx-trigger="load, every {{ poll_s }}s" hx-swap="innerHTML">
+  <p class="muted">Loading…</p>
+</div>
+{% if embed_url %}
+<iframe id="full" class="embed" data-src="{{ embed_url }}" title="{{ title }} UI" hidden></iframe>
+<script>
+  document.querySelectorAll("#view-toggle button").forEach((b) => b.addEventListener("click", () => {
+    const full = b.dataset.view === "full", frame = document.getElementById("full");
+    document.querySelectorAll("#view-toggle button").forEach((x) => x.classList.toggle("on", x === b));
+    if (full && !frame.src) frame.src = frame.dataset.src;
+    frame.hidden = !full;
+    document.getElementById("summary").hidden = full;
+  }));
+</script>
+{% endif %}
+{% endblock %}

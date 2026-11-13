@@ -1,0 +1,45 @@
+{% from "partials/macros.html" import unreachable, verdict, metrics %}
+{% if not mlflow.reachable %}
+{{ unreachable("MLflow", mlflow.error) }}
+{% else %}
+<h2>Running now</h2>
+{% if mlflow.running %}
+<ul class="runs">
+  {% for run in mlflow.running %}
+  <li>
+    {{ verdict(run) }}
+    <span class="run-name">{{ run.experiment }} / {{ run.name }}</span>
+    <span class="muted">started {{ run.started | ago }}</span>
+    {{ metrics(run.metrics) }}
+    {% if run.url %}<a href="{{ run.url }}" target="_blank" rel="noopener">MLflow ↗</a>{% endif %}
+  </li>
+  {% endfor %}
+</ul>
+{% else %}
+<p class="muted">Nothing running.</p>
+{% endif %}
+
+<h2>Latest run per experiment</h2>
+{% if mlflow.latest %}
+<div class="table-wrap">
+<table>
+  <thead><tr><th>Experiment</th><th>Result</th><th>Run</th><th>When</th><th class="n">Took</th><th>Key metrics</th><th></th></tr></thead>
+  <tbody>
+    {% for run in mlflow.latest %}
+    <tr>
+      <td>{{ run.experiment }}</td>
+      <td>{{ verdict(run) }}</td>
+      <td>{{ run.name }}</td>
+      <td class="muted">{{ run.started | ago }}</td>
+      <td class="n">{% if run.duration_s is not none %}{{ run.duration_s | num }} s{% else %}-{% endif %}</td>
+      <td>{{ metrics(run.metrics) }}</td>
+      <td>{% if run.url %}<a href="{{ run.url }}" target="_blank" rel="noopener">MLflow ↗</a>{% endif %}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+</div>
+{% else %}
+<p class="muted">No runs recorded yet.</p>
+{% endif %}
+{% endif %}

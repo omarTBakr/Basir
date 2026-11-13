@@ -1,0 +1,21 @@
+{% macro unreachable(service, error) -%}
+<div class="unreachable" role="status">
+  <strong>{{ service }} not reachable.</strong>
+  <span class="muted">{{ error }}</span>
+</div>
+{%- endmacro %}
+
+{% macro badge(label, css) -%}
+<span class="badge {{ css }}">{{ label }}</span>
+{%- endmacro %}
+
+{% macro verdict(run) -%}
+{% set css = {"pass": "ok", "done": "ok", "fail": "failed", "failed": "failed", "running": "running"}[run.verdict] %}
+{{ badge(run.verdict, css) }}
+{%- endmacro %}
+
+{% macro metrics(values) -%}
+<span class="metrics">
+  {% for name, value in values.items() %}<span><span class="muted">{{ name }}</span> {{ value | num }}</span>{% endfor %}
+</span>
+{%- endmacro %}

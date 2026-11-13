@@ -1,0 +1,28 @@
+# NVIDIA GPU metrics (nvidia-smi) on 127.0.0.1:9835. Needs the NVIDIA container runtime
+# of the native Docker Engine; Docker Desktop cannot pass the GPU through.
+
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: 10m
+    max-file: "3"
+
+services:
+  gpu-exporter:
+    image: utkuozdemir/nvidia_gpu_exporter:1.16.0
+    restart: unless-stopped
+    logging: *logging
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu, utility]
+    ports:
+      - 127.0.0.1:9835:9835
+    healthcheck:
+      test: [CMD, nvidia-smi, -L]
+      interval: 15s
+      timeout: 5s
+      retries: 5

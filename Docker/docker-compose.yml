@@ -1,0 +1,25 @@
+# Basir local stack: experiment tracking, workflow engine and monitoring.
+#
+#   scripts/stack.sh up       # start (creates env/stack.env on first run)
+#   scripts/stack.sh status   # URLs, container health, Prometheus targets
+#
+# Each service lives in its own folder (Docker/<service>/compose.yml) next to its config
+# files; this file only includes them. Paths inside a fragment are relative to its folder.
+# Variables come from env/stack.env (passed with --env-file by scripts/stack.sh).
+#
+# Every port binds to 127.0.0.1. Prometheus, Grafana and node-exporter use the host
+# network so they can reach loopback-only services (the Basir server on :8000) and
+# report the laptop's real network interfaces.
+
+name: basir
+
+include:
+  - postgres/compose.yml
+  - mlflow/compose.yml
+  - temporal/compose.yml
+  - temporal-ui/compose.yml
+  - node-exporter/compose.yml
+  - gpu-exporter/compose.yml
+  - postgres-exporter/compose.yml
+  - prometheus/compose.yml
+  - grafana/compose.yml

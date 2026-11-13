@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Basir · {{ title }}</title>
+  <link rel="icon" href="{{ url_for('static', path='basir-logo-light.svg') }}">
+  <link rel="stylesheet" href="{{ url_for('static', path='style.css') }}?v={{ asset_version }}">
+  <script>
+    // Theme: saved choice, else the system setting. Runs before paint to avoid a flash.
+    (function () {
+      let saved = null;
+      try { saved = localStorage.getItem("basir-theme"); } catch (e) {}
+      const dark = saved ? saved === "dark" : matchMedia("(prefers-color-scheme: dark)").matches;
+      document.documentElement.dataset.theme = dark ? "dark" : "light";
+    })();
+  </script>
+  <script src="https://cdn.jsdelivr.net/npm/htmx.org@2.0.4/dist/htmx.min.js"></script>
+  {% block head %}{% endblock %}
+</head>
+<body class="console">
+  <header class="topbar">
+    <a class="brand" href="/live">
+      <img class="logo logo-light" src="{{ url_for('static', path='basir-logo-light.svg') }}" alt="">
+      <img class="logo logo-dark" src="{{ url_for('static', path='basir-logo-dark.svg') }}" alt="">
+      Basir <small>Console</small>
+    </a>
+    <div class="status" hx-get="/partials/status" hx-trigger="load, every 15s" hx-swap="innerHTML"></div>
+    <button id="theme-toggle" type="button" aria-label="Toggle light / dark theme">◐</button>
+  </header>
+  <aside class="sidebar">
+    {% for group, items in tab_groups %}
+    <div class="group">{{ group }}</div>
+    {% for t in items %}
+    <a class="nav{% if not t.enabled %} later{% endif %}" href="{{ t.path }}" title="{{ t.summary }}" {% if page == t.key %}aria-current="page"{% endif %}>
+      <span class="ico">{{ t.icon }}</span>{{ t.title }}
+      {% if t.phase %}<span class="count">Phase {{ t.phase }}</span>{% endif %}
+    </a>
+    {% endfor %}
+    {% endfor %}
+  </aside>
+  <main>
+    <div class="page-head">
+      <h1>{{ title }}</h1>
+      {% block actions %}{% endblock %}
+    </div>
+    {% block content %}{% endblock %}
+  </main>
+  <script>
+    document.getElementById("theme-toggle").addEventListener("click", () => {
+      const next = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
+      document.documentElement.dataset.theme = next;
+      try { localStorage.setItem("basir-theme", next); } catch (e) {}
+      document.dispatchEvent(new CustomEvent("basir:theme", { detail: next }));
+    });
+  </script>
+  {% block scripts %}{% endblock %}
+</body>
+</html>

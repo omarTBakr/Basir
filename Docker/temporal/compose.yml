@@ -1,0 +1,38 @@
+# Temporal server (auto-setup applies the schema to the temporal / temporal_visibility
+# databases created by Docker/postgres/init-databases.sh). Metrics on :9091.
+
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: 10m
+    max-file: "3"
+
+services:
+  temporal:
+    image: temporalio/auto-setup:1.29.7
+    restart: unless-stopped
+    logging: *logging
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DB: postgres12
+      DB_PORT: "5432"
+      POSTGRES_SEEDS: postgres
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PWD: ${POSTGRES_PASSWORD}
+      DBNAME: temporal
+      VISIBILITY_DBNAME: temporal_visibility
+      SKIP_DB_CREATE: "true"
+      BIND_ON_IP: 0.0.0.0
+      TEMPORAL_BROADCAST_ADDRESS: 127.0.0.1
+      PROMETHEUS_ENDPOINT: 0.0.0.0:9091
+    ports:
+      - 127.0.0.1:7233:7233
+      - 127.0.0.1:9091:9091
+    healthcheck:
+      test: [CMD, temporal, operator, cluster, health, --address, 127.0.0.1:7233]
+      interval: 15s
+      timeout: 10s
+      retries: 20
+      start_period: 60s
