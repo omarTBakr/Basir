@@ -2,12 +2,14 @@
 !include ../_style.iuml
 title Whole system — packages and main classes
 
-package "basir.api" {
-  class Server
-  class GradioUI
+package "basir.api (built: see api_console)" {
+  class "Console + phone listener" as Server
+  class "Console UI\n(FastAPI + HTMX, tabs)" as GradioUI
+  class "Batcher → GPU worker" as Batcher
+  class "MapManager" as MapManager
 }
-package "basir.pipeline" {
-  class Pipeline
+package "basir.pipelines (built: see pipelines)" {
+  class "Phase 0 DAG on Airflow" as Pipeline
 }
 package "basir.ingest" {
   interface FrameSource
@@ -49,10 +51,14 @@ package "basir.core" {
   class geometry <<module>>
 }
 
-Server --> Pipeline
+Server --> Batcher
+Server --> MapManager
 Server --> QueryEngine
 Server --> GuidanceLoop
 GradioUI ..> Server : uses
+GradioUI ..> Pipeline : Pipelines tab (Airflow REST)
+Batcher ..> Detector : Phase 1 (stub model today)
+MapManager --> OccupancyMap : live voxel map
 Pipeline --> FrameSource
 Pipeline --> KeyframeSelector
 Pipeline --> Detector

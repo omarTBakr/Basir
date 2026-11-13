@@ -1,0 +1,72 @@
+@startuml
+!include ../_style.iuml
+title Async ingest — several phones, one GPU worker, no frame waits for another
+autonumber "<b>0"
+
+participant "Phone page A\n(browser, WebXR)" as phoneA
+participant "Phone page B" as phoneB
+participant "Ingest app\n(:8001, TLS, token required)" as ingest
+participant "TokenStore" as tokens
+queue "InProcessFrameBus\n(latest-frame queue per phone, size 2)" as bus
+participant "Batcher\n(≤ 8 frames / 20 ms)" as batcher
+participant "ProcessBackend\n(spawned GPU worker)" as worker
+participant "DeviceRegistry" as devices
+participant "LatestFrames /\nMapManager" as fanout
+participant "Console\n/ws/view, /ws/map" as console
+
+== Connect ==
+phoneA -> ingest : WebSocket /ws/stream/{device_id}
+ingest -> ingest : valid_device_id, Host is an IP literal,\nOrigin is the page's own
+phoneA -> ingest : first message {"type": "auth", "token": "bsr_…"}\n(or Authorization: Bearer; ?token= is refused, 1008)
+ingest -> tokens : verify(device_id, token)
+tokens --> ingest : ok (hash matches, not expired)
+ingest -> devices : connect(device_id)
+note right of ingest
+  A second socket for the same device id,
+  a bad token or no auth message within
+  10 s closes with 1008.
+end note
+
+== Stream ==
+loop each frame, 5–15 fps per phone
+  phoneA -> ingest : binary: JSON header{seq, t, intrinsics, pose, depth} | JPEG | depth16
+  ingest -> ingest : decode_frame (size bound INGEST_MAX_IMAGE_SIDE)
+  ingest -> bus : put(QueuedFrame)
+  bus --> ingest : dropped older? (basir_frames_dropped)
+  ingest -> fanout : publish(frame) → viewers; submit(frame) → live map
+end
+phoneB -> ingest : frames (same path)
+ingest -> bus : put(QueuedFrame)
+
+== Batch and infer ==
+loop forever
+  batcher -> bus : next_batch(max_size, max_wait)
+  bus --> batcher : newest frame of every phone that has one
+  batcher -> worker : infer(jpegs) (pipe to the worker process)
+  worker --> batcher : inference time, one result per frame
+  batcher -> devices : deliver(ProcessedFrame) for each frame
+  devices -> ingest : result queue of that device (oldest dropped past 64)
+  ingest --> phoneA : JSON FrameResult{seq, latency_ms, queue_ms, batch_size, dropped}
+  ingest --> phoneB : JSON FrameResult
+end
+
+== Watch ==
+console -> fanout : /ws/view/{device_id} (JPEG + depth PNG at VIEW_MAX_FPS)\n/ws/map/{device_id} (points)
+fanout --> console : frames, stats, map chunks
+
+== Disconnect ==
+phoneA -> ingest : close
+ingest -> devices : disconnect(device_id)
+ingest -> bus : remove(device_id)
+ingest -> fanout : forget / disconnected(device_id)
+
+note over worker
+  If the worker process dies, basir_worker_alive drops to 0,
+  the batch in flight is lost and ProcessBackend restarts it
+  once; after a second death batches are skipped until the
+  server restarts.
+  Every stage exports Prometheus metrics (basir_*): frames
+  received / dropped, queue depth, batch size, inference and
+  end-to-end latency.
+end note
+@enduml

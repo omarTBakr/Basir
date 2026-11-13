@@ -1,27 +1,28 @@
 # Software engineering docs
 
 UML for Basir, written in PlantUML. Every `.puml` has its rendered `.png` committed next to it.
-Phase 0 code (`basir/core`, `basir/ingest`, `utilities/`) is in place on the [`phase_0` branch](https://github.com/omarTBakr/Basir/tree/phase_0); the other diagrams describe the **planned** design from the project's design plan,
-plus the deployment decision taken since: a realme phone running ARCore records and displays, and
-the laptop (RTX 4060, 8 GB) is the server. Class and module names match the planned package layout. Update a
-diagram in the same change as the code that makes it true or different.
+Phase 0 and its infrastructure (`basir/core`, `basir/ingest`, `basir/spatial`, `basir/api`, `basir/pipelines`, `utilities/`,
+the Docker stack) are built on the [`phase_0` branch](https://github.com/omarTBakr/Basir/tree/phase_0); the diagrams marked
+*as built* below follow that code. The memory, query and guidance diagrams describe the **planned** design from the project's
+design plan, plus the deployment decision taken since: a realme phone running ARCore records and displays, and the laptop
+(RTX 4060, 8 GB) is the server. Update a diagram in the same change as the code that makes it true or different.
 
 ## Implementation status (living section, updated as work lands)
 
-_Last updated: 2026-11-11._ ✅ built on [`phase_0`](https://github.com/omarTBakr/Basir/tree/phase_0) · 🔄 being built on a work branch · ⏳ designed, not built.
+_Last updated: 2026-11-13._ ✅ built on [`phase_0`](https://github.com/omarTBakr/Basir/tree/phase_0) · 🔄 being built on a work branch · ⏳ designed, not built.
 
 | Area | Diagrams | Status |
 |---|---|---|
 | Core data model and geometry | [core_types](4_class_diagrams/core_types.png) | ✅ `Frame`, `Pose`, `CameraIntrinsics`, geometry; `Observation` / `ObjectTrack` / `QueryResult` ⏳ |
-| Frame sources and datasets | [ingest_and_spatial](4_class_diagrams/ingest_and_spatial.png) | ✅ `FrameSource`, `TUMDatasetSource`, dataset prep; `ARCoreStreamSource` / `RecordingSource` ⏳ |
+| Frame sources and datasets | [ingest_and_spatial](4_class_diagrams/ingest_and_spatial.png) | ✅ `FrameSource`, `TUMDatasetSource`, dataset prep, voxel map; `RecordingSource` ⏳ |
 | Data versioning | — | ✅ DVC: one `.dvc` per TUM sequence, local remote `dvc-remotes/Basir` |
-| Replay and evaluation | [replay_eval](3_sequence_diagrams/replay_eval.png), [evaluation](2_use_case_diagrams/evaluation.png) | ✅ replay, point-cloud check with MLflow, Temporal pipeline DAG (MLflow parent/child runs) |
-| Multi-phone streaming | [phone_stream](3_sequence_diagrams/phone_stream.png), [phone_app](2_use_case_diagrams/phone_app.png) | ✅ server-side ingest + GPU micro-batching (stub model); phone app ⏳ |
-| Server, UI and observability | system overviews | ✅ Docker stack (`Docker/<service>/`, one compose with `include`), FastAPI UI, Prometheus, Grafana; CI (GitHub Actions + pre-commit) |
+| Replay and evaluation | [replay_eval](3_sequence_diagrams/replay_eval.png), [evaluation](2_use_case_diagrams/evaluation.png) | ✅ replay, point-cloud check with MLflow, depth-consistency gate |
+| Pipelines (Airflow) | [pipeline_airflow](3_sequence_diagrams/pipeline_airflow.png), [pipelines](4_class_diagrams/pipelines.png) | ✅ Phase 0 DAG on Apache Airflow 3.3.2 (`dags/phase0.py`), MLflow parent/child runs, `run_pipeline.py` over the REST API; Console Pipelines tab |
+| Multi-phone streaming | [async_ingest](3_sequence_diagrams/async_ingest.png), [phone_pairing](3_sequence_diagrams/phone_pairing.png), [phone_stream](3_sequence_diagrams/phone_stream.png), [phone_app](2_use_case_diagrams/phone_app.png) | ✅ per-phone latest-frame queues → one GPU worker with micro-batching (stub model); pairing with hashed, expiring tokens; phone **page** (WebXR colour + depth + pose); native app ⏳ |
+| Live view and live map | [live_map](3_sequence_diagrams/live_map.png) | ✅ Live tab (colour + depth), 3D map tab (voxel fusion per phone, save to `.ply` + MLflow) |
+| Server, Console and observability | [api_console](4_class_diagrams/api_console.png), [local_stack](5_deployment_diagrams/local_stack.png) | ✅ FastAPI Console with tabs (HTMX), loopback-only Host + Origin checks, embedded MLflow / Airflow / Grafana; Docker stack (`Docker/<service>/`, one compose with `include`): Postgres, MLflow, Airflow, statsd-exporter, Prometheus, Grafana, exporters; CI (GitHub Actions + pre-commit) |
 | Memory building, querying, guidance | [ingest_keyframe](3_sequence_diagrams/ingest_keyframe.png), [query_where_is](3_sequence_diagrams/query_where_is.png), [guidance_reacquire](3_sequence_diagrams/guidance_reacquire.png), [perception](4_class_diagrams/perception.png), [memory](4_class_diagrams/memory.png), [query_and_guidance](4_class_diagrams/query_and_guidance.png) | ⏳ Phases 1–5 |
 | Robot integration | [06_robot_integration](1_user_stories/06_robot_integration.png) | ⏳ Phase 7 |
-
-**Diagrams to add once the work branches merge:** the async ingest design (per-phone latest-frame queues → spawned GPU worker with micro-batching), the Temporal pipeline DAG and its MLflow parent/child runs, and the deployment view (Docker Compose: Postgres, MLflow, Temporal, Prometheus, Grafana; FastAPI server; phones).
 
 ## Observability
 
@@ -69,7 +70,11 @@ different jar. `_style.iuml` holds the shared look.
 | Frame → keyframe → detect / segment / embed → 3D → fusion | [ingest_keyframe](3_sequence_diagrams/ingest_keyframe.png) |
 | Query: parse → retrieve → VLM verify → rank → directions | [query_where_is](3_sequence_diagrams/query_where_is.png) |
 | Guidance loop: live directions, re-acquisition, tracking, stale | [guidance_reacquire](3_sequence_diagrams/guidance_reacquire.png) |
-| Phone app: ARCore session, WebSocket stream, answers back | [phone_stream](3_sequence_diagrams/phone_stream.png) |
+| Phone page (as built): WebXR session, token auth, WebSocket stream, results back | [phone_stream](3_sequence_diagrams/phone_stream.png) |
+| Async ingest (as built): per-phone queues → batcher → GPU worker → results, live view and map fan-out | [async_ingest](3_sequence_diagrams/async_ingest.png) |
+| Phone pairing (as built): QR code, 4-digit code, approve on the laptop, hashed expiring token | [phone_pairing](3_sequence_diagrams/phone_pairing.png) |
+| Live map (as built): keyframe gate, voxel fusion, map viewer, save, idle eviction | [live_map](3_sequence_diagrams/live_map.png) |
+| Pipelines (as built): Phase 0 DAG on Airflow, MLflow parent/child runs, Console Pipelines tab | [pipeline_airflow](3_sequence_diagrams/pipeline_airflow.png) |
 | Replay a session and score it | [replay_eval](3_sequence_diagrams/replay_eval.png) |
 
 ## 4. Class diagrams — `4_class_diagrams/`
@@ -82,3 +87,11 @@ different jar. `_style.iuml` holds the shared look.
 | Model adapters (`basir.perception`) | [perception](4_class_diagrams/perception.png) |
 | Fusion, Qdrant store, keyframe store (`basir.memory`) | [memory](4_class_diagrams/memory.png) |
 | Query engine, LLM clients, guidance, server (`basir.query`, `basir.guidance`, `basir.api`) | [query_and_guidance](4_class_diagrams/query_and_guidance.png) |
+| Server and Console as built: apps, ingest, devices, live map, views, middleware (`basir.api`) | [api_console](4_class_diagrams/api_console.png) |
+| Pipelines as built: the Airflow DAG file, steps, runner, Airflow client (`basir.pipelines`, `dags/`) | [pipelines](4_class_diagrams/pipelines.png) |
+
+## 5. Deployment diagram — `5_deployment_diagrams/`
+
+| Scope | Diagram |
+| --- | --- |
+| The laptop (Console, phone listener, GPU worker), the Docker stack (Postgres, MLflow, Airflow, statsd-exporter, Prometheus, Grafana, exporters), mounts and volumes, phones over Wi-Fi | [local_stack](5_deployment_diagrams/local_stack.png) |

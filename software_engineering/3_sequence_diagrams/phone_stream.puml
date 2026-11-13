@@ -1,47 +1,55 @@
 @startuml
 !include ../_style.iuml
-title Phone app — connect, stream and display
+title Phone page — connect, stream and display (as built; a native app comes later)
 autonumber "<b>0"
 
 actor User as user
-participant "Phone app\n(Android)" as app
-participant "ARCore session" as arcore
-participant "WebSocket\n(Wi-Fi or USB tethering)" as ws
-participant "FastAPI server" as api
-participant "ARCoreStreamSource" as src
+participant "Phone page\n(Chrome on the phone)" as page
+participant "WebXR session\n(immersive-ar: camera-access, depth-sensing)" as xr
+participant "Phone listener\n(https://<LAN IP>:8001)" as listener
+participant "Console\n(127.0.0.1:8000)" as console
 
-user -> app : open, enter server address
-app -> arcore : start session (Depth API on)
-app -> ws : connect
-ws -> api : /ws/stream
-api -> src : register stream
-api --> app : hello{session_id, wanted fps / resolution}
+user -> page : open the QR-code URL from the Devices tab
+page -> listener : GET / (phone page); pair once (see phone_pairing)
+listener --> page : token "bsr_…" kept in localStorage
 
-loop each ARCore frame
-  arcore --> app : camera image, pose (6-DoF), depth, intrinsics, timestamp
-  alt tracking state = TRACKING
-    app -> ws : binary: JPEG + depth (16-bit) + JSON{pose, K, t}
-    ws -> api
-    api -> src : decode → Frame
-  else tracking lost
-    app -> ws : status{tracking: lost}
-    note right of app
-      Frames without a good pose are not used
-      for 3D memory; the user sees a hint to
-      move the phone slowly.
+user -> page : **Start AR stream** (or **Start camera stream**: colour only, any browser)
+page -> xr : requestSession("immersive-ar", depth-sensing, camera-access)
+page -> listener : WebSocket wss://…/ws/stream/{device_id}
+page -> listener : {"type": "auth", "token": "bsr_…"} (first message)
+listener --> page : accepted (1008 if wrong, expired or missing)
+
+loop each XR frame (≈ 5 fps with depth, ≈ 10 fps colour only)
+  xr --> page : camera image, viewer pose (6-DoF), depth (160 columns), projection matrix
+  alt tracking
+    page -> page : WebXR camera (y up, −z forward) → Basir camera (y down, z forward)\nintrinsics from the projection matrix, depth in mm
+    page -> listener : binary: u32 length | JSON{seq, t, intrinsics, pose, depth{w, h, scale}} | JPEG | depth16
+    listener -> console : QueuedFrame → bus, live view, live map (see async_ingest)
+    console --> listener : FrameResult
+    listener --> page : JSON{seq, latency_ms, queue_ms, batch_size, dropped}
+    page --> user : fps, latency, dropped
+  else tracking lost / no pose
+    page -> listener : frame without pose (colour only)
+    note right of page
+      Frames without a pose feed the Live view
+      and the GPU batch but not the 3D map.
     end note
   end
 end
 
-user -> app : ask a question
-app -> ws : JSON{type: query, text}
-ws -> api
-api --> app : JSON{type: answer, text, keyframe_url, directions}
-api --> app : JSON{type: directions, ...} (repeated)
-api --> app : JSON{type: mask, rle, frame_t}
-app -> app : draw mask overlay on the live view
+user -> console : Live tab: colour + depth of this phone\n3D map tab: the fused voxel map
+console -> listener : /ws/view/{device_id}, /ws/map/{device_id}
+listener --> console : JPEG + depth PNG at VIEW_MAX_FPS, points
 
-opt connection lost
-  app -> ws : reconnect with backoff, same session_id
-end
+user -> page : Stop
+page -> listener : close
+listener -> console : disconnect: registry, bus, map session (idle TTL)
+
+note over page, listener
+  Later (Phase 1+): the same socket carries
+  {"type": "query", text} and the answers back
+  (see system_overview and query_where_is).
+  The planned native ARCore app speaks this
+  same protocol and pairing.
+end note
 @enduml

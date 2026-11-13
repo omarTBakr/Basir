@@ -1,0 +1,222 @@
+@startuml
+!include ../_style.iuml
+title Server and Console (basir.api) — as built
+
+package "Apps" {
+  class "create_app()" as app <<FastAPI>> {
+    Console on 127.0.0.1:8000
+    lifespan: worker, bus, batcher, maps
+    ..
+    state.ingest: IngestState
+    state.mlflow: MLflowView
+    state.airflow: AirflowView
+  }
+  class "create_ingest_app()" as ingestapp <<FastAPI>> {
+    phone listener on the LAN (:8001, TLS)
+    GET /  (phone page)
+    POST /pair, GET /pair/{id}
+    WS /ws/stream/{device_id}
+  }
+  class "create_proxy_app()" as proxy <<FastAPI>> {
+    same-origin embed of MLflow (:8002) and Airflow (:8003)
+    CSP frame-ancestors, Location rewrite, 16 MiB bodies
+  }
+}
+
+class IngestState {
+  bus: FrameBus
+  devices: DeviceRegistry
+  worker_device: str
+  frames: LatestFrames
+  maps: MapManager
+  tokens: TokenStore
+  pairing: PairingRequests
+}
+
+package "Ingest" {
+  interface FrameBus {
+    put(frame): dropped_older
+    next_batch(max_size, max_wait)
+    depth(device)
+    remove(device)
+  }
+  class InProcessFrameBus {
+    queue_size: int
+  }
+  class QueuedFrame {
+    device, header: FrameHeader
+    jpeg, depth, received
+  }
+  class Batcher {
+    max_size = 8, max_wait = 20 ms
+    run()
+    process(batch)
+  }
+  interface InferenceBackend {
+    start()
+    infer(jpegs): seconds
+    stop()
+  }
+  class ProcessBackend {
+    device, startup_timeout
+    spawned worker process
+  }
+  class StubModel
+  class DeviceRegistry {
+    connect(device): DeviceSession
+    disconnect(device)
+    deliver(ProcessedFrame)
+  }
+  class DeviceSession {
+    record_received(dropped)
+    record_processed(): FrameResult
+    stats(queue_depth)
+  }
+  class protocol <<module>> {
+    FrameHeader, FrameResult
+    encode_frame / decode_frame
+    DEVICE_ID, valid_device_id
+  }
+}
+
+package "Devices" {
+  class TokenStore {
+    path: devices.json, ttl_days
+    create(device): token
+    verify(device, token)
+    revoke(device)
+    entries(): TokenInfo
+  }
+  class TokenInfo {
+    created_at, expires_at
+    expired()
+  }
+  class PairingRequests {
+    open(device, label, address)
+    approve(id) / deny(id)
+    collect(id)
+    seen(address), last_visit()
+  }
+  class PairRequest {
+    id, device, label, code, address
+    status, token
+  }
+}
+
+package "Live view and map" {
+  class LatestFrames {
+    publish(frame)
+    waiter(device)
+    forget(device)
+  }
+  class MapManager {
+    session(device)
+    submit(frame)
+    disconnected(device)
+    evict_idle()
+    reset(device), save(device)
+  }
+  class MapSession {
+    voxels: VoxelMap
+    trajectory, subscribers
+    meta(), broadcast()
+  }
+}
+
+package "Observe" {
+  class MLflowView {
+    experiments()
+    pipelines()
+  }
+  class AirflowView {
+    snapshot(): AirflowSnapshot
+    JWT login, "not reachable" when down
+  }
+  class AirflowSnapshot {
+    runs: DagRunSummary
+    colour(dag, run)
+  }
+  class dag <<module>> {
+    layout(names, edges, statuses)
+    status_class()
+  }
+  class grafana <<module>> {
+    DASHBOARDS, PANELS, panel_url()
+  }
+  class metrics <<module>> {
+    basir_* counters, gauges, histograms
+    HTTPMetricsMiddleware
+  }
+}
+
+package "Middleware" {
+  class RequestIDMiddleware
+  class OriginGuard {
+    refuses cross-origin WebSockets
+    and POST / PUT / PATCH / DELETE
+  }
+  class "add_standard_middleware()" as std {
+    TrustedHost (loopback, or IP literals
+    for the phone listener) + OriginGuard
+    + metrics + request ids
+  }
+  class RedactSecretsFilter {
+    bsr_… and token=… → [redacted]
+  }
+}
+
+package "UI" {
+  class tabs <<module>> {
+    Operate: Live, Map, Devices
+    Observe: Pipelines, Experiments, Dashboards
+    Coming later: Ask, Memory, …
+  }
+  class ui <<module>> {
+    pages + HTMX partials
+  }
+  class devices_page <<module>>
+}
+
+app *-- IngestState
+app ..> std
+ingestapp ..> std
+proxy ..> std
+ingestapp --> IngestState : shares the Console's
+IngestState --> FrameBus
+IngestState --> DeviceRegistry
+IngestState --> LatestFrames
+IngestState --> MapManager
+IngestState --> TokenStore
+IngestState --> PairingRequests
+FrameBus <|.. InProcessFrameBus
+FrameBus o-- QueuedFrame
+Batcher --> FrameBus : next_batch
+Batcher --> InferenceBackend : infer
+Batcher --> DeviceRegistry : deliver
+InferenceBackend <|.. ProcessBackend
+ProcessBackend ..> StubModel : runs in the worker process
+DeviceRegistry *-- DeviceSession
+TokenStore *-- TokenInfo
+PairingRequests *-- PairRequest
+PairingRequests ..> TokenStore : create on approve
+MapManager *-- MapSession
+AirflowView --> AirflowSnapshot
+AirflowSnapshot ..> dag : colours the nodes
+ui ..> tabs
+ui ..> MLflowView
+ui ..> AirflowView
+ui ..> grafana
+devices_page ..> PairingRequests
+devices_page ..> TokenStore
+ingestapp ..> protocol : decode_frame, valid_device_id
+std ..> OriginGuard
+std ..> RequestIDMiddleware
+std ..> metrics
+
+note bottom of proxy
+  Security: the Console trusts only loopback Hosts; the phone
+  listener accepts IP-literal Hosts (no domain names: DNS
+  rebinding) and needs a token as the first WebSocket message.
+  No innerHTML in the browser code (tested).
+end note
+@enduml

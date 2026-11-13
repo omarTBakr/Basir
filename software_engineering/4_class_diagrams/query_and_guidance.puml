@@ -72,10 +72,10 @@ class Tracker {
 }
 
 class Server {
-  ' FastAPI + WebSocket
-  +ws_stream(socket)
-  +ws_query(socket)
-  +get_keyframe(id)
+  ' the Console (basir.api, built: see api_console)
+  +ws_stream(socket)   ' built
+  +ws_query(socket)    ' Phase 1
+  +get_keyframe(id)    ' Phase 1
 }
 
 QueryEngine --> QueryParser
