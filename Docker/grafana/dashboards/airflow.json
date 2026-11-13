@@ -1,9 +1,9 @@
 {
-  "uid": "basir-temporal",
-  "title": "Temporal",
+  "uid": "basir-airflow",
+  "title": "Airflow",
   "tags": [
     "basir",
-    "temporal"
+    "airflow"
   ],
   "timezone": "browser",
   "schemaVersion": 41,
@@ -26,8 +26,8 @@
     {
       "id": 1,
       "type": "stat",
-      "title": "Frontend requests/s",
-      "description": "",
+      "title": "Scheduler heartbeats/min",
+      "description": "Scheduler loop heartbeats per minute; 0 means the scheduler is down or stuck.",
       "datasource": {
         "type": "prometheus",
         "uid": "basir-prometheus"
@@ -44,27 +44,31 @@
             "type": "prometheus",
             "uid": "basir-prometheus"
           },
-          "expr": "sum(rate(service_requests{service_name=\"frontend\"}[1m]))",
+          "expr": "sum(rate(airflow_scheduler_heartbeat[2m])) * 60",
           "legendFormat": "__auto",
           "refId": "A"
         }
       ],
       "fieldConfig": {
         "defaults": {
-          "unit": "reqps",
+          "unit": "short",
           "thresholds": {
             "mode": "absolute",
             "steps": [
               {
-                "color": "green",
+                "color": "red",
                 "value": null
+              },
+              {
+                "color": "green",
+                "value": 1
               }
             ]
           },
           "color": {
             "mode": "thresholds"
           },
-          "decimals": 2
+          "decimals": 0
         },
         "overrides": []
       },
@@ -86,8 +90,8 @@
     {
       "id": 2,
       "type": "stat",
-      "title": "Workflows completed (1h)",
-      "description": "",
+      "title": "DAG runs running",
+      "description": "DAG runs the scheduler has in the running state.",
       "datasource": {
         "type": "prometheus",
         "uid": "basir-prometheus"
@@ -104,7 +108,7 @@
             "type": "prometheus",
             "uid": "basir-prometheus"
           },
-          "expr": "sum(increase(workflow_success[1h])) or vector(0)",
+          "expr": "sum(airflow_scheduler_dagruns_running)",
           "legendFormat": "__auto",
           "refId": "A"
         }
@@ -146,8 +150,8 @@
     {
       "id": 3,
       "type": "stat",
-      "title": "Workflows failed (1h)",
-      "description": "Failed plus timed-out workflow executions.",
+      "title": "Queued tasks",
+      "description": "Task instances queued in the executor, waiting for a free slot (LocalExecutor: 4).",
       "datasource": {
         "type": "prometheus",
         "uid": "basir-prometheus"
@@ -164,7 +168,67 @@
             "type": "prometheus",
             "uid": "basir-prometheus"
           },
-          "expr": "(sum(increase(workflow_failed[1h])) or vector(0)) + (sum(increase(workflow_timeout[1h])) or vector(0))",
+          "expr": "sum(airflow_executor_queued_tasks)",
+          "legendFormat": "__auto",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          },
+          "decimals": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "area",
+        "textMode": "auto",
+        "justifyMode": "auto",
+        "orientation": "auto"
+      }
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "DAG import errors",
+      "description": "dags/ files that failed to parse; see the Airflow UI for the traceback.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "basir-prometheus"
+      },
+      "gridPos": {
+        "x": 18,
+        "y": 0,
+        "w": 6,
+        "h": 4
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "basir-prometheus"
+          },
+          "expr": "sum(airflow_dag_processing_import_errors)",
           "legendFormat": "__auto",
           "refId": "A"
         }
@@ -208,74 +272,10 @@
       }
     },
     {
-      "id": 4,
-      "type": "stat",
-      "title": "Frontend errors/s",
-      "description": "",
-      "datasource": {
-        "type": "prometheus",
-        "uid": "basir-prometheus"
-      },
-      "gridPos": {
-        "x": 18,
-        "y": 0,
-        "w": 6,
-        "h": 4
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "basir-prometheus"
-          },
-          "expr": "sum(rate(service_error_with_type{service_name=\"frontend\"}[1m])) or vector(0)",
-          "legendFormat": "__auto",
-          "refId": "A"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "reqps",
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              },
-              {
-                "color": "red",
-                "value": 0.01
-              }
-            ]
-          },
-          "color": {
-            "mode": "thresholds"
-          },
-          "decimals": 2
-        },
-        "overrides": []
-      },
-      "options": {
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "colorMode": "value",
-        "graphMode": "area",
-        "textMode": "auto",
-        "justifyMode": "auto",
-        "orientation": "auto"
-      }
-    },
-    {
       "id": 5,
       "type": "timeseries",
-      "title": "Workflow outcomes",
-      "description": "Workflow executions closed per minute, by outcome.",
+      "title": "DAG runs by state",
+      "description": "DAG runs finished per 5 minutes, by final state.",
       "datasource": {
         "type": "prometheus",
         "uid": "basir-prometheus"
@@ -292,8 +292,185 @@
             "type": "prometheus",
             "uid": "basir-prometheus"
           },
-          "expr": "sum(rate(workflow_success[5m])) * 60",
-          "legendFormat": "completed",
+          "expr": "sum by (state) (increase(airflow_dagrun_duration_seconds_count[5m]))",
+          "legendFormat": "{{state}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "drawStyle": "bars",
+            "lineWidth": 1,
+            "fillOpacity": 80,
+            "showPoints": "never",
+            "spanNulls": true,
+            "stacking": {
+              "mode": "normal",
+              "group": "A"
+            }
+          },
+          "color": {
+            "mode": "palette-classic"
+          },
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 6,
+      "type": "timeseries",
+      "title": "Task instances by state",
+      "description": "Task attempts finished per 5 minutes, by state.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "basir-prometheus"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 4,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "basir-prometheus"
+          },
+          "expr": "sum by (state) (increase(airflow_ti_finish[5m]))",
+          "legendFormat": "{{state}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "drawStyle": "bars",
+            "lineWidth": 1,
+            "fillOpacity": 80,
+            "showPoints": "never",
+            "spanNulls": true,
+            "stacking": {
+              "mode": "normal",
+              "group": "A"
+            }
+          },
+          "color": {
+            "mode": "palette-classic"
+          },
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 7,
+      "type": "timeseries",
+      "title": "Task duration",
+      "description": "Mean duration of each task's attempts over the last 15 minutes.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "basir-prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 12,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "basir-prometheus"
+          },
+          "expr": "sum by (dag_id, task_id) (rate(airflow_task_duration_seconds_sum[15m])) / sum by (dag_id, task_id) (rate(airflow_task_duration_seconds_count[15m]))",
+          "legendFormat": "{{dag_id}}.{{task_id}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 10,
+            "showPoints": "never",
+            "spanNulls": true,
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          },
+          "color": {
+            "mode": "palette-classic"
+          },
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 8,
+      "type": "timeseries",
+      "title": "Executor slots",
+      "description": "LocalExecutor task slots: queued, running and open.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "basir-prometheus"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 12,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "basir-prometheus"
+          },
+          "expr": "sum(airflow_executor_queued_tasks)",
+          "legendFormat": "queued",
           "refId": "A"
         },
         {
@@ -301,8 +478,8 @@
             "type": "prometheus",
             "uid": "basir-prometheus"
           },
-          "expr": "sum(rate(workflow_failed[5m])) * 60",
-          "legendFormat": "failed",
+          "expr": "sum(airflow_executor_running_tasks)",
+          "legendFormat": "running",
           "refId": "B"
         },
         {
@@ -310,27 +487,9 @@
             "type": "prometheus",
             "uid": "basir-prometheus"
           },
-          "expr": "sum(rate(workflow_timeout[5m])) * 60",
-          "legendFormat": "timed out",
+          "expr": "sum(airflow_executor_open_slots)",
+          "legendFormat": "open",
           "refId": "C"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "basir-prometheus"
-          },
-          "expr": "sum(rate(workflow_terminate[5m])) * 60",
-          "legendFormat": "terminated",
-          "refId": "D"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "basir-prometheus"
-          },
-          "expr": "sum(rate(workflow_cancel[5m])) * 60",
-          "legendFormat": "cancelled",
-          "refId": "E"
         }
       ],
       "fieldConfig": {
@@ -367,187 +526,10 @@
       }
     },
     {
-      "id": 6,
-      "type": "timeseries",
-      "title": "Activity task calls",
-      "description": "Worker calls that report activity results: a proxy for activity throughput.",
-      "datasource": {
-        "type": "prometheus",
-        "uid": "basir-prometheus"
-      },
-      "gridPos": {
-        "x": 12,
-        "y": 4,
-        "w": 12,
-        "h": 8
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "basir-prometheus"
-          },
-          "expr": "sum by (operation) (rate(service_requests{operation=~\"RespondActivityTask.*|RecordActivityTaskHeartbeat.*\"}[1m]))",
-          "legendFormat": "{{operation}}",
-          "refId": "A"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "reqps",
-          "custom": {
-            "drawStyle": "line",
-            "lineWidth": 1,
-            "fillOpacity": 10,
-            "showPoints": "never",
-            "spanNulls": true,
-            "stacking": {
-              "mode": "none",
-              "group": "A"
-            }
-          },
-          "color": {
-            "mode": "palette-classic"
-          },
-          "min": 0
-        },
-        "overrides": []
-      },
-      "options": {
-        "legend": {
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
-        }
-      }
-    },
-    {
-      "id": 7,
-      "type": "timeseries",
-      "title": "Workflow calls",
-      "description": "",
-      "datasource": {
-        "type": "prometheus",
-        "uid": "basir-prometheus"
-      },
-      "gridPos": {
-        "x": 0,
-        "y": 12,
-        "w": 12,
-        "h": 8
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "basir-prometheus"
-          },
-          "expr": "sum by (operation) (rate(service_requests{operation=~\"StartWorkflowExecution|SignalWithStartWorkflowExecution|SignalWorkflowExecution|RespondWorkflowTask.*|TerminateWorkflowExecution|RequestCancelWorkflowExecution\"}[1m]))",
-          "legendFormat": "{{operation}}",
-          "refId": "A"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "reqps",
-          "custom": {
-            "drawStyle": "line",
-            "lineWidth": 1,
-            "fillOpacity": 10,
-            "showPoints": "never",
-            "spanNulls": true,
-            "stacking": {
-              "mode": "none",
-              "group": "A"
-            }
-          },
-          "color": {
-            "mode": "palette-classic"
-          },
-          "min": 0
-        },
-        "overrides": []
-      },
-      "options": {
-        "legend": {
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
-        }
-      }
-    },
-    {
-      "id": 8,
-      "type": "timeseries",
-      "title": "Frontend latency p95",
-      "description": "Long polls are excluded.",
-      "datasource": {
-        "type": "prometheus",
-        "uid": "basir-prometheus"
-      },
-      "gridPos": {
-        "x": 12,
-        "y": 12,
-        "w": 12,
-        "h": 8
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "basir-prometheus"
-          },
-          "expr": "histogram_quantile(0.95, sum by (le, operation) (rate(service_latency_bucket{service_name=\"frontend\", operation!~\"Poll.*\"}[5m])))",
-          "legendFormat": "{{operation}}",
-          "refId": "A"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "s",
-          "custom": {
-            "drawStyle": "line",
-            "lineWidth": 1,
-            "fillOpacity": 0,
-            "showPoints": "never",
-            "spanNulls": true,
-            "stacking": {
-              "mode": "none",
-              "group": "A"
-            }
-          },
-          "color": {
-            "mode": "palette-classic"
-          },
-          "min": 0
-        },
-        "overrides": []
-      },
-      "options": {
-        "legend": {
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
-        }
-      }
-    },
-    {
       "id": 9,
       "type": "timeseries",
-      "title": "Activity call latency p95",
-      "description": "",
+      "title": "DAG run duration",
+      "description": "Mean duration of finished DAG runs, by DAG and state.",
       "datasource": {
         "type": "prometheus",
         "uid": "basir-prometheus"
@@ -564,8 +546,8 @@
             "type": "prometheus",
             "uid": "basir-prometheus"
           },
-          "expr": "histogram_quantile(0.95, sum by (le, operation) (rate(service_latency_bucket{service_name=\"frontend\", operation=~\"RespondActivityTask.*|RecordActivityTaskHeartbeat.*\"}[5m])))",
-          "legendFormat": "{{operation}}",
+          "expr": "sum by (dag_id, state) (rate(airflow_dagrun_duration_seconds_sum[1h])) / sum by (dag_id, state) (rate(airflow_dagrun_duration_seconds_count[1h]))",
+          "legendFormat": "{{dag_id}} {{state}}",
           "refId": "A"
         }
       ],
@@ -575,7 +557,7 @@
           "custom": {
             "drawStyle": "line",
             "lineWidth": 1,
-            "fillOpacity": 0,
+            "fillOpacity": 10,
             "showPoints": "never",
             "spanNulls": true,
             "stacking": {
@@ -605,8 +587,8 @@
     {
       "id": 10,
       "type": "timeseries",
-      "title": "Persistence latency p95",
-      "description": "",
+      "title": "Scheduler loop duration",
+      "description": "How long one scheduler loop takes (p50 / p99 from StatsD timers).",
       "datasource": {
         "type": "prometheus",
         "uid": "basir-prometheus"
@@ -623,9 +605,18 @@
             "type": "prometheus",
             "uid": "basir-prometheus"
           },
-          "expr": "histogram_quantile(0.95, sum by (le, operation) (rate(persistence_latency_bucket[5m])))",
-          "legendFormat": "{{operation}}",
+          "expr": "histogram_quantile(0.5, sum by (le) (rate(airflow_scheduler_scheduler_loop_duration_bucket[5m])))",
+          "legendFormat": "p50",
           "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "basir-prometheus"
+          },
+          "expr": "histogram_quantile(0.99, sum by (le) (rate(airflow_scheduler_scheduler_loop_duration_bucket[5m])))",
+          "legendFormat": "p99",
+          "refId": "B"
         }
       ],
       "fieldConfig": {
@@ -634,7 +625,7 @@
           "custom": {
             "drawStyle": "line",
             "lineWidth": 1,
-            "fillOpacity": 0,
+            "fillOpacity": 10,
             "showPoints": "never",
             "spanNulls": true,
             "stacking": {

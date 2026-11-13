@@ -166,7 +166,7 @@ def server_settings(data_dir: Path, **overrides: object) -> Settings:
     """Settings with every external service unreachable and MLflow in `data_dir`."""
     values: dict[str, object] = {
         "data_dir": str(data_dir),
-        "temporal_address": UNREACHABLE,
+        "airflow_url": f"http://{UNREACHABLE}",
         "grafana_url": f"http://{UNREACHABLE}",
         "prometheus_url": f"http://{UNREACHABLE}",
         "batch_max_wait_ms": 5.0,

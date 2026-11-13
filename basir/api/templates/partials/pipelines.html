@@ -1,27 +1,28 @@
 {% from "partials/macros.html" import unreachable, badge, metrics %}
-<h2>Temporal workflows</h2>
-{% if not temporal.reachable %}
-{{ unreachable("Temporal", temporal.error) }}
-{% elif temporal.workflows %}
+<h2>Airflow DAG runs</h2>
+{% if not airflow.reachable %}
+{{ unreachable("Airflow", airflow.error) }}
+{% elif airflow.runs %}
 <div class="table-wrap">
 <table>
-  <thead><tr><th>Workflow</th><th>Type</th><th>Status</th><th>Started</th><th>Closed</th><th></th></tr></thead>
+  <thead><tr><th>Run</th><th>DAG</th><th>State</th><th>Tasks</th><th>Started</th><th>Ended</th><th></th></tr></thead>
   <tbody>
-    {% for w in temporal.workflows %}
+    {% for r in airflow.runs %}
     <tr>
-      <td>{{ w.workflow_id }}</td>
-      <td class="muted">{{ w.workflow_type }}</td>
-      <td>{{ badge(w.status, w.status | status_class) }}</td>
-      <td class="muted">{{ w.started | ago }}</td>
-      <td class="muted">{{ w.closed | ago }}</td>
-      <td><a href="{{ w.url }}" target="_blank" rel="noopener">Temporal ↗</a></td>
+      <td>{{ r.run_id }}</td>
+      <td class="muted">{{ r.dag_id }}</td>
+      <td>{{ badge(r.state, r.state | status_class) }}</td>
+      <td>{% for t in r.tasks %}<a href="{{ t.url }}" target="_blank" rel="noopener" title="{{ t.task_id }}{% if t.label %} {{ t.label }}{% endif %}: {{ t.state }}" class="badge {{ t.state | status_class }}">{{ t.task_id }}{% if t.label %}·{{ t.label }}{% endif %}</a> {% endfor %}</td>
+      <td class="muted">{{ r.started | ago }}</td>
+      <td class="muted">{{ r.ended | ago }}</td>
+      <td><a href="{{ r.url }}" target="_blank" rel="noopener">Airflow ↗</a></td>
     </tr>
     {% endfor %}
   </tbody>
 </table>
 </div>
 {% else %}
-<p class="muted">No workflows yet.</p>
+<p class="muted">No DAG runs yet.</p>
 {% endif %}
 
 <h2>Pipeline runs</h2>
@@ -31,24 +32,25 @@
 <p class="muted">No pipeline runs recorded yet.</p>
 {% endif %}
 {% for p in mlflow.pipelines %}
-{% set workflow = temporal.by_id(p.workflow_id) %}
+{% set dagrun = airflow.by_run_id(p.workflow_id) %}
+{% set dag = airflow.colour(p.dag, dagrun) %}
 <section class="card">
   <div class="card-head">
     {{ badge(p.status, p.status | status_class) }}
     <span class="run-name">{{ p.pipeline }} · {{ p.run.name }}</span>
     <span class="muted">started {{ p.run.started | ago }}{% if p.run.duration_s is not none %}, {{ p.run.duration_s | num }} s{% endif %}</span>
-    {% if workflow %}<span class="muted">Temporal:</span> {{ badge(workflow.status, workflow.status | status_class) }}{% endif %}
+    {% if dagrun %}<span class="muted">Airflow:</span> {{ badge(dagrun.state, dagrun.state | status_class) }}{% endif %}
     <span class="links">
-      {% if workflow %}<a href="{{ workflow.url }}" target="_blank" rel="noopener">Temporal ↗</a>{% endif %}
+      {% if dagrun %}<a href="{{ dagrun.url }}" target="_blank" rel="noopener">Airflow ↗</a>{% endif %}
       {% if p.run.url %}<a href="{{ p.run.url }}" target="_blank" rel="noopener">MLflow ↗</a>{% endif %}
     </span>
   </div>
   {% if p.run.metrics %}<div>{{ metrics(p.run.metrics) }}</div>{% endif %}
-  {% if p.dag.nodes %}
+  {% if dag.nodes %}
   <div class="dag">
-    <svg viewBox="-2 -2 {{ p.dag.width + 4 }} {{ p.dag.height + 4 }}" width="{{ p.dag.width + 4 }}" height="{{ p.dag.height + 4 }}" role="img" aria-label="Pipeline steps and their status">
-      {% for d in p.dag.paths %}<path class="edge" d="{{ d }}"/>{% endfor %}
-      {% for n in p.dag.nodes %}
+    <svg viewBox="-2 -2 {{ dag.width + 4 }} {{ dag.height + 4 }}" width="{{ dag.width + 4 }}" height="{{ dag.height + 4 }}" role="img" aria-label="Pipeline steps and their status">
+      {% for d in dag.paths %}<path class="edge" d="{{ d }}"/>{% endfor %}
+      {% for n in dag.nodes %}
       <g class="node {{ n.css }}" transform="translate({{ n.x }},{{ n.y }})">
         <title>{{ n.name }}: {{ n.status }}</title>
         <rect width="{{ node_w }}" height="{{ node_h }}" rx="6"/>

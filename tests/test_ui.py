@@ -32,7 +32,7 @@ def test_live_partial_without_phones(client: TestClient) -> None:
 
 def test_unreachable_services_are_shown_not_raised(client: TestClient) -> None:
     pipelines = client.get("/partials/pipelines")
-    assert pipelines.status_code == 200 and "Temporal not reachable" in pipelines.text
+    assert pipelines.status_code == 200 and "Airflow not reachable" in pipelines.text
     dashboards = client.get("/dashboards").text
     assert "Grafana not reachable" in dashboards and dashboards.count('badge failed">down') == 3
 
@@ -68,7 +68,7 @@ def test_grafana_urls() -> None:
         "basir-host",
         "basir-gpu",
         "basir-postgres",
-        "basir-temporal",
+        "basir-airflow",
         "basir-server",
     }
     assert {p.dashboard_uid for p in PANELS} <= {d.uid for d in DASHBOARDS}

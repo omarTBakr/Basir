@@ -14,15 +14,25 @@ GAP_X, GAP_Y = 48, 14
 
 _STATUS_WORDS = {
     "ok": {"success", "succeeded", "passed", "pass", "finished", "completed", "complete", "ok", "done"},
-    "failed": {"failed", "fail", "error", "killed", "cancelled", "canceled", "timed_out", "terminated"},
-    "running": {"running", "started", "in_progress"},
-    "pending": {"pending", "scheduled", "queued", "waiting"},
-    "skipped": {"skipped", "cached"},
+    "failed": {
+        "failed",
+        "fail",
+        "error",
+        "killed",
+        "cancelled",
+        "canceled",
+        "timed_out",
+        "terminated",
+        "upstream_failed",
+    },
+    "running": {"running", "started", "in_progress", "up_for_retry", "up_for_reschedule", "deferred", "restarting"},
+    "pending": {"pending", "scheduled", "queued", "waiting", "none"},
+    "skipped": {"skipped", "cached", "removed"},
 }
 
 
 def status_class(raw: str | None) -> str:
-    """Bucket a free-form status (`basir.status`, MLflow, Temporal) into ok/failed/running/pending/skipped/unknown."""
+    """Bucket a free-form status (`basir.status`, MLflow, Airflow) into ok/failed/running/pending/skipped/unknown."""
     word = (raw or "pending").strip().lower().replace(" ", "_").replace("-", "_")
     return next((bucket for bucket, words in _STATUS_WORDS.items() if word in words), "unknown")
 

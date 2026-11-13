@@ -1,4 +1,4 @@
-# Postgres: one server for MLflow (db mlflow) and Temporal (temporal, temporal_visibility).
+# Postgres: one server for MLflow (db mlflow) and Airflow's metadata (db airflow).
 # init-databases.sh creates those databases on the first start of an empty volume.
 
 x-logging: &logging

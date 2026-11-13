@@ -7,7 +7,7 @@ Listeners (one process, one shared state):
                      /ws/stream/{device_id} with the token as the first message or a Bearer
                      header (INGEST_HOST / INGEST_PORT / INGEST_TLS)
     127.0.0.1:8002   MLflow UI, frameable copy for the Experiments tab (MLFLOW_EMBED_PORT)
-    127.0.0.1:8003   Temporal UI, frameable copy for the Pipelines tab (TEMPORAL_EMBED_PORT)
+    127.0.0.1:8003   Airflow UI, frameable copy for the Pipelines tab (AIRFLOW_EMBED_PORT)
 
 Usage:
     python scripts/serve.py               # all of the above
@@ -90,10 +90,10 @@ def main(argv: list[str] | None = None) -> int:
         )
     servers.append(
         server(
-            create_proxy_app(settings.temporal_ui_url, console_port=args.port),
+            create_proxy_app(settings.airflow_url, console_port=args.port),
             "127.0.0.1",
-            settings.temporal_embed_port,
-            "Temporal UI",
+            settings.airflow_embed_port,
+            "Airflow UI",
         )
     )
     # Ctrl+C reaches one server's signal handler; `serve` then stops the others.

@@ -1,0 +1,7 @@
+# The build context is the project root; send only what the Dockerfile copies.
+*
+!pyproject.toml
+!uv.lock
+!Docker/airflow/install-basir-env.sh
+!Docker/airflow/entrypoint.sh
+!Docker/airflow/ensure_database.py

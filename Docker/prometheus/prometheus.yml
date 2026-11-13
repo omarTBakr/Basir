@@ -20,9 +20,10 @@ scrape_configs:
     static_configs:
       - targets: [127.0.0.1:9187]
 
-  - job_name: temporal
+  # Airflow's StatsD metrics, through statsd-exporter
+  - job_name: airflow
     static_configs:
-      - targets: [127.0.0.1:9091]
+      - targets: [127.0.0.1:9102]
 
   # The Basir FastAPI server; DOWN until `basir` serves on :8000.
   - job_name: basir

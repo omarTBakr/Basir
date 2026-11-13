@@ -1,0 +1,24 @@
+# Airflow sends StatsD with InfluxDB-style tags (dag_id, task_id, state, ...), which the exporter
+# turns into labels by itself; these rules only give the timers and state-suffixed names one
+# metric each. Everything else keeps the default name: airflow.scheduler_heartbeat ->
+# airflow_scheduler_heartbeat, airflow.executor.queued_tasks -> airflow_executor_queued_tasks.
+defaults:
+  observer_type: histogram
+  histogram_options:
+    buckets: [1, 5, 15, 30, 60, 120, 300, 600, 1800, 3600, 7200]
+
+mappings:
+  # dagrun.duration.<state> -> airflow_dagrun_duration_seconds{state, dag_id}
+  - match: airflow.dagrun.duration.*
+    name: airflow_dagrun_duration_seconds
+    labels:
+      state: $1
+  # task.duration{dag_id, task_id} -> airflow_task_duration_seconds
+  - match: airflow.task.duration
+    name: airflow_task_duration_seconds
+  # ti.<state> gauges from the scheduler (ti.running, ti.queued, ...) -> airflow_ti{state}
+  - match: airflow.ti.(running|queued|scheduled|deferred)
+    match_type: regex
+    name: airflow_ti
+    labels:
+      state: $1

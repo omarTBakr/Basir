@@ -16,8 +16,8 @@ flowchart TB
     phoneframe["ingest/phone_frame<br/>frame_from_message (wire → Frame)"]
     playback["ingest/playback<br/>Pacer · PlaybackStats"]
     spatial["spatial/<br/>pointcloud · fusion · live_map"]
-    pipelines["pipelines/<br/>dag · phase0 · phase0_steps · runtime"]
-    api["api/ (the Console)<br/>app · protocol · ingest · framebus · batcher · worker · devices<br/>rgbd · viewer · mapping · pairing · tokens · tls · lan · devices_page<br/>phone_simulator · embed · tabs · metrics · middleware<br/>dag · mlflow_view · temporal_view · services · grafana · ui"]
+    pipelines["pipelines/<br/>dag · phase0 · phase0_steps · runner<br/>airflow_task · airflow_client"]
+    api["api/ (the Console)<br/>app · protocol · ingest · framebus · batcher · worker · devices<br/>rgbd · viewer · mapping · pairing · tokens · tls · lan · devices_page<br/>phone_simulator · embed · tabs · metrics · middleware<br/>dag · mlflow_view · airflow_view · services · grafana · ui"]
   end
   subgraph shared["utilities/"]
     config["config<br/>Settings"]
@@ -76,9 +76,11 @@ Basir/
 │   │   └── live_map.py             # keyframe gate + incremental voxel map for the live 3D map
 │   ├── pipelines/
 │   │   ├── dag.py                  # steps + dependencies, as dag.json / Mermaid
-│   │   ├── phase0.py               # Phase0Pipeline Temporal workflow and its DAG
-│   │   ├── phase0_steps.py         # its activities, each logged as a nested MLflow run
-│   │   └── runtime.py              # Temporal client, worker, task queue, UI links
+│   │   ├── phase0.py               # the Phase 0 DAG's shape and params (no third-party imports)
+│   │   ├── phase0_steps.py         # its steps, each logged as a nested MLflow run; execute / run_locally
+│   │   ├── runner.py               # runs one step in Basir's environment (JSON in / out)
+│   │   ├── airflow_task.py         # Airflow side: starts the runner, maps non-retryable failures
+│   │   └── airflow_client.py       # Airflow REST API client (JWT), run / task URLs
 │   └── api/                        # the Console: phone ingest, GPU worker, live view and map, metrics, web UI
 │       ├── app.py                  # app factory; lifespan starts the GPU worker, batcher and live maps
 │       ├── protocol.py             # wire format (JSON header + JPEG + optional depth), validation, device ids
@@ -96,12 +98,12 @@ Basir/
 │       ├── lan.py                  # LAN / hotspot addresses for the QR codes
 │       ├── devices_page.py         # the Devices tab
 │       ├── phone_simulator.py      # phones replaying a dataset over WebSocket
-│       ├── embed.py                # frameable loopback proxies of the MLflow and Temporal UIs
+│       ├── embed.py                # frameable loopback proxies of the MLflow and Airflow UIs
 │       ├── tabs.py                 # tab registry: sidebar, routes, "coming later" pages
 │       ├── metrics.py              # Prometheus metrics, HTTP timing, /metrics
 │       ├── middleware.py           # request IDs, Host/Origin checks, log redaction
 │       ├── mlflow_view.py          # MLflow layer: running, latest per experiment, pipelines
-│       ├── temporal_view.py        # running / recent Temporal workflows
+│       ├── airflow_view.py         # running / recent Airflow DAG runs and task states
 │       ├── dag.py                  # dag.json parsing and SVG layout
 │       ├── services.py             # Grafana / Prometheus reachability
 │       ├── grafana.py              # which dashboards and panels are embedded
@@ -115,13 +117,13 @@ Basir/
 │   ├── experiment.py               # MLflow run tracking (incl. parent / nested runs)
 │   ├── tracing.py                  # Langfuse tracing (no-op without keys)
 │   └── utility.py                  # URLs, hashing, archives, downloads, PNG, .env parsing
+├── dags/                           # Airflow DAG files (phase0.py), mounted into the Airflow containers
 ├── scripts/                        # command line only
 │   ├── download_dataset.py         # get a preset / URL / archive ready on disk
 │   ├── check_env.py                # versions, CUDA, paths, Langfuse smoke trace
 │   ├── replay.py                   # real-time RGB-D playback window
 │   ├── visualize_pointcloud.py     # the Phase 0 check
-│   ├── worker.py                   # Temporal worker for the pipelines
-│   ├── run_pipeline.py             # start a pipeline (phase0) and print its links
+│   ├── run_pipeline.py             # trigger a pipeline (Airflow DAG) and print its links
 │   ├── serve.py                    # Console :8000 (loopback), phone listener :8001 (LAN), embeds :8002/:8003
 │   ├── simulate_phones.py          # N simulated phones streaming a dataset
 │   └── stack.sh                    # local stack: up / down / status / logs

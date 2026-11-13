@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Start a Basir pipeline on Temporal; a worker (scripts/worker.py) must be running.
+"""Trigger a Basir pipeline (an Airflow DAG) through Airflow's REST API; the stack must be up.
 
-Prints the workflow ID, its Temporal UI page and the MLflow parent run.
+Prints the DAG run ID, its Airflow UI page and the MLflow parent run.
 
     python scripts/run_pipeline.py phase0                          # fr1/desk + fr1/room
     python scripts/run_pipeline.py phase0 --datasets fr1/desk --wait
@@ -10,64 +10,89 @@ Prints the workflow ID, its Temporal UI page and the MLflow parent run.
 from __future__ import annotations
 
 import argparse
-import asyncio
+from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
 import sys
+import time
+from typing import Any
 import uuid
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from temporalio.client import WorkflowFailureError, WorkflowHandle
-from temporalio.exceptions import ActivityError
-
-from basir.pipelines.phase0 import DEFAULT_DATASETS, Phase0Input, Phase0Pipeline, Phase0Result
-from basir.pipelines.runtime import TASK_QUEUE, connect, workflow_url
+from basir.pipelines.airflow_client import FINISHED, AirflowClient, AirflowError, credentials, run_url
+from basir.pipelines.phase0 import DAG_ID, DEFAULT_DATASETS, OPEN_TASK, Phase0Params
+from basir.pipelines.runner import ERROR_MARKER
 from utilities.config import get_settings
-from utilities.experiment import run_url
+from utilities.experiment import run_url as mlflow_run_url
 
-RUN_ID_WAIT_SECONDS = 30.0
+RUN_ID_WAIT_SECONDS = 120.0  # the first task opens the parent run; a cold start takes a while
+POLL_SECONDS = 5.0
 
 
-async def start(options: Phase0Input, wait: bool) -> int:
-    client = await connect()
-    workflow_id = f"phase0-{datetime.now(UTC):%Y%m%d-%H%M%S}-{uuid.uuid4().hex[:6]}"
-    handle = await client.start_workflow(Phase0Pipeline.run, options, id=workflow_id, task_queue=TASK_QUEUE)
-    print(f"Workflow  {workflow_id}")
-    print(f"Temporal  {workflow_url(workflow_id)}")
+def start(
+    client: AirflowClient,
+    options: Phase0Params,
+    wait: bool,
+    sleep: Callable[[float], None] = time.sleep,
+    clock: Callable[[], float] = time.monotonic,
+) -> int:
+    run_id = f"phase0-{datetime.now(UTC):%Y%m%d-%H%M%S}-{uuid.uuid4().hex[:6]}"
+    client.unpause(DAG_ID)
+    client.trigger(DAG_ID, conf={k: v for k, v in vars(options).items() if v is not None}, run_id=run_id)
+    print(f"Run       {run_id}")
+    print(f"Airflow   {run_url(client.base_url, DAG_ID, run_id)}")
 
-    run_id = await _parent_run_id(handle)
-    if run_id is None:
-        print("MLflow    parent run not open yet (is a worker running?)")
+    parent = _parent_run_id(client, run_id, sleep, clock)
+    if parent is None:
+        print("MLflow    parent run not open yet (are the Airflow scheduler and MLflow up?)")
     else:
-        print(f"MLflow    {run_url(run_id) or f'run {run_id} in {get_settings().mlflow_uri}'}")
+        print(f"MLflow    {mlflow_run_url(parent) or f'run {parent} in {get_settings().mlflow_uri}'}")
     if not wait:
         return 0
 
-    try:
-        result: Phase0Result = await handle.result()
-    except WorkflowFailureError as e:
-        cause = e.cause.cause if isinstance(e.cause, ActivityError) and e.cause.cause else e.cause
-        print(f"FAILED    {cause}")
+    while (state := client.dag_run(DAG_ID, run_id)["state"]) not in FINISHED:
+        sleep(POLL_SECONDS)
+    if state != "success":
+        print(f"FAILED    {_failure(client, run_id)}")
         return 1
-    for cloud in result.clouds:
+    for cloud in client.xcom(DAG_ID, run_id, "gate") or []:
         print(
-            f"PASS      {cloud.dataset}: median {cloud.median_cm:.2f} cm, "
-            f"{cloud.within_5cm or 0:.0%} within 5 cm ({cloud.frames_used} frames, {cloud.points:,} points)"
+            f"PASS      {cloud['dataset']}: median {cloud['median_cm']:.2f} cm, "
+            f"{cloud['within_5cm'] or 0:.0%} within 5 cm ({cloud['frames_used']} frames, {cloud['points']:,} points)"
         )
     return 0
 
 
-async def _parent_run_id(handle: WorkflowHandle) -> str | None:
-    """Ask the workflow for its MLflow parent run, waiting briefly for the first activity to open it."""
-    loop = asyncio.get_running_loop()
-    deadline = loop.time() + RUN_ID_WAIT_SECONDS
-    while loop.time() < deadline:
-        run_id = await handle.query(Phase0Pipeline.mlflow_run_id)
-        if run_id is not None:
-            return run_id
-        await asyncio.sleep(0.5)
+def _parent_run_id(
+    client: AirflowClient, run_id: str, sleep: Callable[[float], None], clock: Callable[[], float]
+) -> str | None:
+    """The MLflow parent run that the first task pushes as an XCom, waiting for it to run."""
+    deadline = clock() + RUN_ID_WAIT_SECONDS
+    while clock() < deadline:
+        parent = client.xcom(DAG_ID, run_id, OPEN_TASK, key="parent_run_id")
+        if parent is not None:
+            return str(parent) or None  # "": MLflow tracking was off
+        if client.dag_run(DAG_ID, run_id)["state"] in FINISHED:
+            return None
+        sleep(1.0)
     return None
+
+
+def _failure(client: AirflowClient, run_id: str) -> str:
+    """The first failed task and the error its step reported (from the task log)."""
+    tasks: list[dict[str, Any]] = client.task_instances(DAG_ID, run_id)
+    failed = [t for t in tasks if t.get("state") == "failed"]
+    if not failed:
+        return f"DAG run ended without a failed task ({', '.join(sorted({str(t.get('state')) for t in tasks}))})"
+    first = min(failed, key=lambda t: t.get("end_date") or "")
+    name = first["task_id"] + (f"[{first['rendered_map_index']}]" if first.get("rendered_map_index") else "")
+    try:
+        log = client.task_log(DAG_ID, run_id, first["task_id"], int(first.get("try_number") or 1), first["map_index"])
+    except AirflowError:
+        log = ""
+    errors = [line.split(ERROR_MARKER, 1)[1].strip() for line in log.splitlines() if ERROR_MARKER in line]
+    return f"{name}: {errors[-1] if errors else 'failed; see its log in Airflow'}"
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -82,7 +107,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--wait", action="store_true", help="Wait for the result; exit 1 if the pipeline fails.")
     args = parser.parse_args(argv)
 
-    options = Phase0Input(
+    options = Phase0Params(
         datasets=args.datasets,
         replay_stride=args.replay_stride,
         every=args.every,
@@ -90,10 +115,12 @@ def main(argv: list[str] | None = None) -> int:
         voxel=args.voxel,
         max_frames=args.max_frames,
     )
+    settings = get_settings()
     try:
-        return asyncio.run(start(options, args.wait))
-    except RuntimeError as e:  # temporalio raises RuntimeError when the server is unreachable
-        print(f"Cannot reach Temporal at {get_settings().temporal_address}: {e}", file=sys.stderr)
+        with AirflowClient(settings.airflow_url, credentials(settings)) as client:
+            return start(client, options, args.wait)
+    except AirflowError as e:
+        print(f"Airflow at {settings.airflow_url}: {e}", file=sys.stderr)
         return 1
 
 

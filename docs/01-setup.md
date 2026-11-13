@@ -22,7 +22,7 @@ uv run python scripts/check_env.py --langfuse   # also send one smoke trace to L
 
 `uv sync` installs the runtime dependencies plus the `dev` group (DVC, pytest, ruff, SciPy for the geometry cross-checks). Every script is run as `uv run python scripts/<name>.py`, so nothing is installed outside the project's `.venv`.
 
-**`check_env.py`** prints the Python and package versions (torch, numpy, opencv-python, open3d, pydantic, tqdm, mlflow, langfuse, temporalio), runs a small fp16 matmul on CUDA, and shows the resolved device, datasets folder, MLflow store and whether Langfuse is on. It exits with 1 when CUDA is missing, or when `--langfuse` is given and the smoke trace can't be sent.
+**`check_env.py`** prints the Python and package versions (torch, numpy, opencv-python, open3d, pydantic, tqdm, mlflow, langfuse), runs a small fp16 matmul on CUDA, and shows the resolved device, datasets folder, MLflow store and whether Langfuse is on. It exits with 1 when CUDA is missing, or when `--langfuse` is given and the smoke trace can't be sent.
 
 ## How settings are resolved
 
@@ -51,8 +51,8 @@ Only what the built phases use is configurable. Each later phase adds its own se
 | `MLFLOW_TRACKING_URI` | `sqlite:///<DATA_DIR>/mlflow.db` | Where runs are recorded; `http://127.0.0.1:5000` for the local stack. An `http://` URI also turns on the UI's run links |
 | `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY` | unset | Runtime tracing; off until **both** are set |
 | `LANGFUSE_BASE_URL` | Langfuse Cloud | Langfuse server URL |
-| `TEMPORAL_ADDRESS` | `127.0.0.1:7233` | Temporal frontend that the pipeline worker, `run_pipeline.py` and the UI connect to |
-| `TEMPORAL_UI_URL` | `http://127.0.0.1:8233` | Temporal web UI, for links from the server UI |
+| `AIRFLOW_URL` | `http://127.0.0.1:8080` | Airflow API server and UI that `run_pipeline.py` and the Console's Pipelines tab use |
+| `AIRFLOW_USERNAME`, `AIRFLOW_PASSWORD` | `admin`, blank | Airflow user for the REST API; a blank password means `AIRFLOW_ADMIN_PASSWORD` from `env/stack.env` |
 | `GRAFANA_URL` | `http://127.0.0.1:3000` | Grafana, embedded on the Dashboards page |
 | `PROMETHEUS_URL` | `http://127.0.0.1:9090` | Prometheus of the local stack |
 | `INGEST_QUEUE_SIZE` | `2` | Frames kept per phone before the oldest is dropped (≥ 1) |
@@ -60,7 +60,7 @@ Only what the built phases use is configurable. Each later phase adds its own se
 | `BATCH_MAX_WAIT_MS` | `20` | Longest wait after a batch's first frame before it's sent (≥ 0) |
 | `INGEST_HOST`, `INGEST_PORT` | `0.0.0.0`, `8001` | The phone-only listener (phone page, pairing, stream); the Console stays on `127.0.0.1:8000` |
 | `INGEST_TLS` | `true` | HTTPS with a self-signed certificate on the phone listener (phone browsers need it for the camera and AR) |
-| `MLFLOW_EMBED_PORT`, `TEMPORAL_EMBED_PORT` | `8002`, `8003` | Loopback ports that serve frameable copies of the MLflow and Temporal UIs |
+| `MLFLOW_EMBED_PORT`, `AIRFLOW_EMBED_PORT` | `8002`, `8003` | Loopback ports that serve frameable copies of the MLflow and Airflow UIs |
 | `VIEW_MAX_FPS` | `15` | Most frames per second sent to a Live view |
 | `MAP_VOXEL_M` | `0.02` | Live map voxel size in metres |
 | `MAP_KEYFRAME_M`, `MAP_KEYFRAME_DEG` | `0.05`, `5` | A frame is fused into the live map after the camera moved this far or turned this much |

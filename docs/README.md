@@ -12,10 +12,10 @@ One page per feature that's built, and a placeholder for each one that isn't. St
 | [04 Data versioning with DVC](04-data-versioning.md) | Tracked datasets, the local remote, the hardlink cache and `dvc unprotect` |
 | [05 Replay and the Phase 0 point-cloud check](05-replay-and-pointcloud.md) | `replay.py`, `visualize_pointcloud.py`, fusion, the depth-consistency gate and its results |
 | [06 Experiment tracking and tracing](06-experiment-tracking.md) | MLflow experiments, standard tags, parent / child pipeline runs and their tag schema; Langfuse tracing |
-| [07 Pipelines](07-pipelines.md) | The Temporal `Phase0Pipeline`, its DAG and retries, `worker.py`, `run_pipeline.py`, `dag.json` |
+| [07 Pipelines](07-pipelines.md) | The Airflow DAG `phase0`, its tasks and retries, `run_pipeline.py`, `dag.json`, adding a DAG |
 | [08 Local stack](08-local-stack.md) | Docker Compose services and ports, native Docker Engine for the GPU, stack settings, Grafana dashboards and panel ids |
 | [09 Server and UI](09-server-and-ui.md) | FastAPI on :8000, the `/ws/stream/{device_id}` protocol, latest-frame queues, micro-batching, the GPU worker, `basir_*` metrics, the four pages |
-| [10 Async processing](10-async-processing.md) | Why live frames use asyncio and pipelines use Temporal, and why not Celery |
+| [10 Async processing](10-async-processing.md) | Why live frames use asyncio and pipelines use Airflow, and why not Celery |
 | [11 Testing and code quality](11-testing.md) | pytest and the `network` marker, fixtures, ruff, mypy, CI and pre-commit |
 | [12 Architecture and project structure](12-architecture.md) | Module map, the design rules, the file tree |
 
@@ -32,7 +32,7 @@ One page per feature that's built, and a placeholder for each one that isn't. St
 
 | Phase | Status |
 |---|---|
-| 0 Setup: environment, TUM data, geometry, frame source, replay, point-cloud check, MLflow + Langfuse wiring, DVC, Temporal pipeline, local stack | **Built**, final visual check pending |
+| 0 Setup: environment, TUM data, geometry, frame source, replay, point-cloud check, MLflow + Langfuse wiring, DVC, Airflow pipeline, local stack | **Built**, final visual check pending |
 | 1 L1 temporal memory: keyframes, SigLIP embeddings in Qdrant, "seen 42 s ago" answers, Gradio UI | Planned |
 | 2 Object-level memory: open-vocabulary detection, SAM masks, per-object embeddings, 2D fusion | Planned |
 | 3 L2 spatial memory: 3D object positions, 3D fusion, bearing + distance directions | Planned |

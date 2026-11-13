@@ -1,6 +1,6 @@
 # Server and UI
 
-One process runs the **Basir Console**: it takes frames from several phones at once, runs them on the GPU, shows each phone's colour and depth live, fuses a live 3D map, exports Prometheus metrics at `/metrics` and brings MLflow, Temporal and Grafana into one web UI.
+One process runs the **Basir Console**: it takes frames from several phones at once, runs them on the GPU, shows each phone's colour and depth live, fuses a live 3D map, exports Prometheus metrics at `/metrics` and brings MLflow, Airflow and Grafana into one web UI.
 
 The code is in [`basir/api`](../basir/api/__init__.py).
 
@@ -22,7 +22,7 @@ On start-up the app spawns the GPU worker and waits until its model is loaded, t
 | Console | `127.0.0.1:8000` | Every page, `/metrics`, the Live and map sockets, and `/ws/stream` **without** a token for local programs (the simulator); browsers on other sites are refused (see [Security](#security)) |
 | Phones | `INGEST_HOST:INGEST_PORT` (`0.0.0.0:8001`), HTTPS | Only the phone page (`/`), pairing (`/pair`), `/ws/stream/{device_id}` (token required) and `/healthz` |
 | MLflow UI | `127.0.0.1:8002` | A frameable copy of MLflow for the Experiments tab |
-| Temporal UI | `127.0.0.1:8003` | A frameable copy of the Temporal UI for the Pipelines tab |
+| Airflow UI | `127.0.0.1:8003` | A frameable copy of the Airflow UI for the Pipelines tab |
 
 All four run in one process and share one state (frame queues, devices, live maps), built by `basir.api.app.create_app`; `basir.api.ingest.create_ingest_app` and `basir.api.embed.create_proxy_app` make the other three. Nothing but the phone stream is reachable from the network.
 
@@ -47,7 +47,7 @@ Nothing is installed on the phone: the phone listener serves a **phone page** th
 
 **Firewall.** On Fedora, a hotspot the laptop shares (NetworkManager zone `nm-shared`) blocks its clients until the port is allowed once: `sudo firewall-cmd --zone=nm-shared --add-port=8001/tcp` (add `--permanent` to keep it). For the router's network the Workstation zone already allows high ports; otherwise `sudo firewall-cmd --add-port=8001/tcp`. "This site can't be reached" on the phone means the firewall or the network, not the page.
 
-**Embedded MLflow and Temporal.** Both UIs send `X-Frame-Options: SAMEORIGIN` and load assets from absolute paths, so the Console can neither frame them nor host them under a prefix. Each gets its own loopback port that forwards requests and replaces `X-Frame-Options` with a CSP `frame-ancestors` that names only the Console's origins ([`embed.py`](../basir/api/embed.py), see [Security](#security)). The MLflow copy runs only when `MLFLOW_TRACKING_URI` is an HTTP server.
+**Embedded MLflow and Airflow.** MLflow sends `X-Frame-Options: SAMEORIGIN` and both UIs load assets from absolute paths, so the Console can neither frame them directly nor host them under a prefix. Each gets its own loopback port that forwards requests and replaces the upstream frame headers with a CSP `frame-ancestors` that names only the Console's origins ([`embed.py`](../basir/api/embed.py), see [Security](#security)). The MLflow copy runs only when `MLFLOW_TRACKING_URI` is an HTTP server. Airflow's UI works at the root of its port with no `base_url` set (it takes its base path from the request); log in once inside the frame as `admin`, and the session cookie (127.0.0.1, `SameSite=Lax`) is shared with the Console's site.
 
 ## Security
 
@@ -59,7 +59,7 @@ The Console has no login: it trusts whoever can reach `127.0.0.1`. The checks be
 | A site opening `/ws/view` (camera), `/ws/map` or `/ws/stream`, or posting to pair, revoke, approve, deny, reset or save (CSRF) | `OriginGuard` ([`middleware.py`](../basir/api/middleware.py)) on every listener: a WebSocket handshake or a POST/PUT/PATCH/DELETE whose `Origin` is not the listener's own origin (same host and port as `Host`) is refused (403; `Origin: null` too). Browsers always send `Origin` on WebSockets and cross-origin POSTs, and HTMX posts are same-origin, so the Console keeps working. A request without `Origin` comes from a local program and passes, unless `Sec-Fetch-Site` says another site sent it. |
 | Tokenless `/ws/stream` on the Console | Kept, for the phone simulator and other local programs. Browsers cannot omit `Origin`, so only the Console's own pages could use it from a browser; a local program can already read `devices.json`, so a token would not stop it. Phones always use the LAN listener, where a token is required. |
 | Script injection through device or run names | The Live and 3D map pages build `<select>` options with `textContent`, never `innerHTML`; Jinja escapes everything in the templates. |
-| Clickjacking through the MLflow and Temporal copies | `Content-Security-Policy: frame-ancestors http://127.0.0.1:<console> http://localhost:<console>` replaces the upstream frame headers. The proxies send the upstream its own `Host`, `Origin` and `Referer` and drop `Forwarded`/`X-Forwarded-*`, allow only GET, HEAD, POST, PATCH and DELETE, cap request bodies at 16 MB, and rewrite `Location` to a path on the proxy (a redirect to any other origin becomes `/`). |
+| Clickjacking through the MLflow and Airflow copies | `Content-Security-Policy: frame-ancestors http://127.0.0.1:<console> http://localhost:<console>` replaces the upstream frame headers. The proxies send the upstream its own `Host`, `Origin` and `Referer` and drop `Forwarded`/`X-Forwarded-*`, allow only GET, HEAD, POST, PATCH and DELETE, cap request bodies at 16 MB, and rewrite `Location` to a path on the proxy (a redirect to any other origin becomes `/`). |
 | Tokens in logs | Tokens never travel in the URL (`?token=` is refused), and `scripts/serve.py` adds a filter to uvicorn's loggers that replaces `bsr_...` and `token=...` with `[redacted]`. Both apps give every request a request ID (`RequestIDMiddleware`, echoed as `X-Request-ID` and printed in the pairing, connect and refusal log lines) and record HTTP metrics, so `/pair` shows up in `basir_http_requests`. |
 | Stolen or forgotten phones | Tokens expire after `TOKEN_TTL_DAYS` (default 30); **Forget** revokes one at once. The token file is written under a lock to a unique temp file and swapped in with `os.replace`, so concurrent pairing and revoking never lose an entry. |
 
@@ -76,10 +76,10 @@ The sidebar comes from one registry, [`tabs.py`](../basir/api/tabs.py). **Adding
 | Operate | **Devices** (`/devices`) | A step-by-step guide to connect a phone (QR code, approve with a code, start), connected phones and paired phones (forget) |
 | Observe | **Dashboards** (`/dashboards`) | Grafana panels and whole dashboards, embedded in kiosk mode, plus whether Grafana, Prometheus and its scrape of this server are up. Panels are listed in [`grafana.py`](../basir/api/grafana.py) |
 | Observe | **Experiments** (`/experiments`) | MLflow summary: what runs now, the latest run per experiment with pass / fail and key metrics. **Full UI** shows MLflow itself in the page; **Open in new tab** links to it |
-| Observe | **Pipelines** (`/pipelines`) | Temporal workflows and recent pipeline runs with their DAGs. **Full UI** shows the Temporal UI in the page |
+| Observe | **Pipelines** (`/pipelines`) | Airflow DAG runs (running first) with each task's state, then recent pipeline runs from MLflow with their DAG drawn and every step coloured by its Airflow state (queued, running, up for retry, failed, upstream failed, ...), linking to the run in Airflow and MLflow. **Full UI** shows the Airflow UI in the page ([Pipelines](07-pipelines.md)) |
 | Coming later | Ask (Phase 1), Objects (Phase 2), Guide me (Phase 4), Robot (Phase 7) | What each will do |
 
-The header shows a dot per service (MLflow, Temporal, Grafana, Prometheus) and the GPU utilization, refreshed every 15 s. Every external service is optional: when one is down its section says *not reachable* and the rest still works. Pages are server-rendered Jinja2 with [HTMX](https://htmx.org) 2.0.4; the 3D map uses [three.js](https://threejs.org) 0.160.0 (both pinned, from a CDN); light and dark themes.
+The header shows a dot per service (MLflow, Airflow, Grafana, Prometheus) and the GPU utilization, refreshed every 15 s. Every external service is optional: when one is down its section says *not reachable* and the rest still works. Pages are server-rendered Jinja2 with [HTMX](https://htmx.org) 2.0.4; the 3D map uses [three.js](https://threejs.org) 0.160.0 (both pinned, from a CDN); light and dark themes.
 
 ## Live view
 
@@ -226,10 +226,10 @@ All metrics have the prefix `basir_`, are served at `/metrics`, scraped by Prome
 | `phone/` | The phone page: pairing, camera and WebXR AR streaming |
 | `viewer` | Newest frame per phone and the `/ws/view` Live socket |
 | `mapping` | Live map fusion, `/ws/map` and the map APIs |
-| `embed` | The frameable MLflow / Temporal proxies |
+| `embed` | The frameable MLflow / Airflow proxies |
 | `metrics` | Metric definitions, HTTP timing and `/metrics` |
 | `middleware` | Request IDs |
-| `mlflow_view`, `temporal_view` | Read-only summaries of MLflow runs and Temporal workflows for the UI |
+| `mlflow_view`, `airflow_view` | Read-only summaries of MLflow runs and Airflow DAG runs (via its REST API) for the UI |
 | `dag` | `dag.json` parsing and SVG layout |
 | `services`, `grafana` | Grafana / Prometheus reachability, and which panels are embedded |
 | `phone_simulator` | Simulated phones replaying a dataset over WebSocket (load tests and the test suite) |

@@ -207,8 +207,8 @@
     {
       "id": 4,
       "type": "stat",
-      "title": "temporal databases",
-      "description": "temporal + temporal_visibility.",
+      "title": "airflow database",
+      "description": "Airflow's metadata database.",
       "datasource": {
         "type": "prometheus",
         "uid": "basir-prometheus"
@@ -225,7 +225,7 @@
             "type": "prometheus",
             "uid": "basir-prometheus"
           },
-          "expr": "sum(pg_database_size_bytes{datname=~\"temporal|temporal_visibility\"})",
+          "expr": "sum(pg_database_size_bytes{datname=~\"airflow\"})",
           "legendFormat": "__auto",
           "refId": "A"
         }
@@ -284,7 +284,7 @@
             "type": "prometheus",
             "uid": "basir-prometheus"
           },
-          "expr": "sum by (datname) (pg_stat_activity_count{datname=~\"mlflow|temporal|temporal_visibility\"})",
+          "expr": "sum by (datname) (pg_stat_activity_count{datname=~\"mlflow|airflow\"})",
           "legendFormat": "{{datname}}",
           "refId": "A"
         }
@@ -402,7 +402,7 @@
             "type": "prometheus",
             "uid": "basir-prometheus"
           },
-          "expr": "pg_database_size_bytes{datname=~\"mlflow|temporal|temporal_visibility\"}",
+          "expr": "pg_database_size_bytes{datname=~\"mlflow|airflow\"}",
           "legendFormat": "{{datname}}",
           "refId": "A"
         }
@@ -461,7 +461,7 @@
             "type": "prometheus",
             "uid": "basir-prometheus"
           },
-          "expr": "sum by (datname) (rate(pg_stat_database_xact_commit{datname=~\"mlflow|temporal|temporal_visibility\"}[1m]))",
+          "expr": "sum by (datname) (rate(pg_stat_database_xact_commit{datname=~\"mlflow|airflow\"}[1m]))",
           "legendFormat": "{{datname}} commit",
           "refId": "A"
         },
@@ -470,7 +470,7 @@
             "type": "prometheus",
             "uid": "basir-prometheus"
           },
-          "expr": "sum by (datname) (rate(pg_stat_database_xact_rollback{datname=~\"mlflow|temporal|temporal_visibility\"}[1m]))",
+          "expr": "sum by (datname) (rate(pg_stat_database_xact_rollback{datname=~\"mlflow|airflow\"}[1m]))",
           "legendFormat": "{{datname}} rollback",
           "refId": "B"
         }
@@ -529,7 +529,7 @@
             "type": "prometheus",
             "uid": "basir-prometheus"
           },
-          "expr": "sum by (datname) (rate(pg_stat_database_tup_inserted{datname=~\"mlflow|temporal|temporal_visibility\"}[1m]))",
+          "expr": "sum by (datname) (rate(pg_stat_database_tup_inserted{datname=~\"mlflow|airflow\"}[1m]))",
           "legendFormat": "{{datname}} insert",
           "refId": "A"
         },
@@ -538,7 +538,7 @@
             "type": "prometheus",
             "uid": "basir-prometheus"
           },
-          "expr": "sum by (datname) (rate(pg_stat_database_tup_updated{datname=~\"mlflow|temporal|temporal_visibility\"}[1m]))",
+          "expr": "sum by (datname) (rate(pg_stat_database_tup_updated{datname=~\"mlflow|airflow\"}[1m]))",
           "legendFormat": "{{datname}} update",
           "refId": "B"
         },
@@ -547,7 +547,7 @@
             "type": "prometheus",
             "uid": "basir-prometheus"
           },
-          "expr": "sum by (datname) (rate(pg_stat_database_tup_deleted{datname=~\"mlflow|temporal|temporal_visibility\"}[1m]))",
+          "expr": "sum by (datname) (rate(pg_stat_database_tup_deleted{datname=~\"mlflow|airflow\"}[1m]))",
           "legendFormat": "{{datname}} delete",
           "refId": "C"
         }
@@ -606,7 +606,7 @@
             "type": "prometheus",
             "uid": "basir-prometheus"
           },
-          "expr": "sum by (datname) (rate(pg_stat_database_blks_hit{datname=~\"mlflow|temporal|temporal_visibility\"}[5m])) / (sum by (datname) (rate(pg_stat_database_blks_hit{datname=~\"mlflow|temporal|temporal_visibility\"}[5m])) + sum by (datname) (rate(pg_stat_database_blks_read{datname=~\"mlflow|temporal|temporal_visibility\"}[5m])))",
+          "expr": "sum by (datname) (rate(pg_stat_database_blks_hit{datname=~\"mlflow|airflow\"}[5m])) / (sum by (datname) (rate(pg_stat_database_blks_hit{datname=~\"mlflow|airflow\"}[5m])) + sum by (datname) (rate(pg_stat_database_blks_read{datname=~\"mlflow|airflow\"}[5m])))",
           "legendFormat": "{{datname}}",
           "refId": "A"
         }

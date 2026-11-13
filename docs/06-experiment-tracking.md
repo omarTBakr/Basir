@@ -7,9 +7,9 @@ Every run leaves a record. **MLflow** answers "did this change make Basir better
 | Tool | Answers | Records | Where |
 |---|---|---|---|
 | **MLflow** | "Did this change make Basir better?" | One run per script or evaluation: params, metrics, artifacts, git commit, GPU | The stack's MLflow server on Postgres, or local SQLite (`mlflow.db`); artifacts in `mlartifacts/` either way |
-| **Temporal** | "Where is this pipeline, and what failed?" | One workflow per pipeline run: each step's inputs, result, retries and timing | The [local stack](08-local-stack.md), UI on port 8233 ([Pipelines](07-pipelines.md)) |
+| **Airflow** | "Where is this pipeline, and what failed?" | One DAG run per pipeline run: each task's state, attempts, timing and log | The [local stack](08-local-stack.md), UI on port 8080 ([Pipelines](07-pipelines.md)) |
 | **Langfuse** | "What happened in this one request?" | One trace per query: each step, LLM / VLM calls, latency and cost | Langfuse Cloud for now; self-hosting later |
-| **Prometheus + Grafana** | "Is the machine keeping up?" | Host, GPU, Postgres, Temporal and Basir server metrics over time | The [local stack](08-local-stack.md) |
+| **Prometheus + Grafana** | "Is the machine keeping up?" | Host, GPU, Postgres, Airflow and Basir server metrics over time | The [local stack](08-local-stack.md) |
 
 ## MLflow
 
@@ -28,7 +28,7 @@ With an `http://` URI the server UI and `run_pipeline.py` also print direct link
 |---|---|---|
 | `phase0-replay` | `scripts/replay.py` | Replay of one sequence |
 | `phase0-pointcloud` | `scripts/visualize_pointcloud.py` | Point-cloud check of one sequence |
-| `phase0-pipeline` | The Temporal `Phase0Pipeline` | Pipeline run (parent) and each step (child) |
+| `phase0-pipeline` | The Airflow DAG `phase0` | Pipeline run (parent) and each step (child) |
 
 ### API
 
@@ -68,7 +68,7 @@ A pipeline run is one **parent** run with one nested **child** run per step. The
 
 | Run | Tags | Artifacts |
 |---|---|---|
-| parent | `basir.pipeline` (`phase0`), `basir.workflow_id` (the Temporal workflow ID), `basir.status` (`running` → `succeeded` / `failed`) | `dag.json`, `dag.mmd` |
+| parent | `basir.pipeline` (`phase0`), `basir.workflow_id` (the Airflow DAG run's `run_id`), `basir.status` (`running` → `succeeded` / `failed`) | `dag.json`, `dag.mmd` |
 | child (per step) | `mlflow.parentRunId`, `basir.step` (e.g. `pointcloud:fr1/room`), `basir.depends_on` (comma-separated step names), `basir.status`, `basir.dataset` (when the step has one) | What the step produces, e.g. the `.ply`, top-down image and trajectory of a `pointcloud` step |
 
 `dag.json` has the shape `{"nodes": [{"id", "activity", "dataset"}], "edges": [{"source", "target"}]}`; `dag.mmd` is the same DAG as a Mermaid flowchart. See [Pipelines](07-pipelines.md).

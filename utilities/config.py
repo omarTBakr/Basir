@@ -48,13 +48,16 @@ class Settings(BaseModel):
     langfuse_secret_key: str | None = Field(default=None, description="Langfuse secret key")
     langfuse_base_url: str | None = Field(default=None, description="Langfuse URL (default: Langfuse Cloud)")
 
-    # Orchestration: Temporal runs the pipelines
-    temporal_address: str = Field(default="127.0.0.1:7233", description="Temporal frontend host:port")
+    # Orchestration: Airflow runs the pipelines (REST API /api/v2 and web UI at the same URL)
+    airflow_url: str = Field(default="http://127.0.0.1:8080", description="Airflow API server and web UI")
+    airflow_username: str = Field(default="admin", description="Airflow user for the REST API")
+    airflow_password: str | None = Field(
+        default=None, description="Its password (blank = AIRFLOW_ADMIN_PASSWORD from env/stack.env)"
+    )
 
     # Server and UI: the services it summarises (all optional; shown as "not reachable" when down)
     grafana_url: str = Field(default="http://127.0.0.1:3000", description="Grafana, embedded on the Dashboards page")
     prometheus_url: str = Field(default="http://127.0.0.1:9090", description="Prometheus, scrapes /metrics")
-    temporal_ui_url: str = Field(default="http://127.0.0.1:8233", description="Temporal web UI, for deep links")
 
     # Live ingest: per-phone queues and the GPU worker's micro-batches
     ingest_queue_size: int = Field(default=2, ge=1, description="Frames kept per phone; older ones are dropped")
@@ -66,7 +69,7 @@ class Settings(BaseModel):
     ingest_port: int = Field(default=8001, description="Port of the phone-only listener")
     ingest_tls: bool = Field(default=True, description="HTTPS on the phone listener (phone browsers need it)")
     mlflow_embed_port: int = Field(default=8002, description="Loopback port that frames the MLflow UI")
-    temporal_embed_port: int = Field(default=8003, description="Loopback port that frames the Temporal UI")
+    airflow_embed_port: int = Field(default=8003, description="Loopback port that frames the Airflow UI")
     view_max_fps: float = Field(default=15.0, gt=0, description="Most frames/s sent to a Live view")
     map_voxel_m: float = Field(default=0.02, gt=0, description="Live map voxel size in metres")
     map_keyframe_m: float = Field(default=0.05, ge=0, description="Move this far to fuse a new keyframe")

@@ -30,7 +30,7 @@ DASHBOARDS = (
     Dashboard("basir-host", "Host"),
     Dashboard("basir-gpu", "GPU"),
     Dashboard("basir-postgres", "Postgres"),
-    Dashboard("basir-temporal", "Temporal"),
+    Dashboard("basir-airflow", "Airflow"),
 )
 
 PANELS = (
@@ -45,7 +45,7 @@ PANELS = (
     Panel("basir-host", 5, "CPU by mode"),
     Panel("basir-host", 8, "Disk I/O"),
     Panel("basir-postgres", 5, "Postgres connections"),
-    Panel("basir-temporal", 5, "Temporal workflow outcomes"),
+    Panel("basir-airflow", 5, "Airflow DAG runs by state"),
 )
 
 

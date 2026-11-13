@@ -4,7 +4,7 @@
 
 ```bash
 uv run pytest -q                              # offline suite (toy dataset, local HTTP server, temporary MLflow store)
-uv run pytest -q -m "not network and not slow" # quick loop: skips spawned processes, live servers, Temporal
+uv run pytest -q -m "not network and not slow" # quick loop: skips spawned processes and live servers
 uv run pytest -q -m network                   # live checks: every TUM preset URL, Langfuse auth, local stack targets
 ```
 
@@ -13,7 +13,7 @@ The suite is configured in [`pyproject.toml`](../pyproject.toml) (`[tool.pytest.
 | Marker | Runs | Needs |
 |---|---|---|
 | (none) | By default | Nothing: no internet, no GPU required, no running services |
-| `slow` | By default (skip with `-m "not network and not slow"`) | Time: the spawned GPU worker (imports torch), uvicorn live servers, the phone simulator, LAN pairing, map save (open3d + MLflow), the Temporal test server in `test_phase0` (downloaded once, then cached) |
+| `slow` | By default (skip with `-m "not network and not slow"`) | Time: the spawned GPU worker (imports torch), uvicorn live servers, the phone simulator, LAN pairing, map save (open3d + MLflow), the live Airflow end-to-end test (`network`) |
 | `gpu` | By default | A CUDA GPU. No test needs one yet; reserved for Phase 1 perception |
 | `network` | Only with `-m network` | The internet, real Langfuse keys in `env/.env` (skipped without them), and the [local stack](08-local-stack.md) running |
 
