@@ -1,4 +1,4 @@
-# Postgres metrics on 127.0.0.1:9187.
+# Postgres metrics on 127.0.0.1:19187.
 
 x-logging: &logging
   driver: json-file
@@ -19,7 +19,7 @@ services:
       DATA_SOURCE_USER: ${POSTGRES_USER}
       DATA_SOURCE_PASS: ${POSTGRES_PASSWORD}
     ports:
-      - 127.0.0.1:9187:9187
+      - 127.0.0.1:19187:9187
     healthcheck:
       test: [CMD-SHELL, "wget -qO /dev/null http://127.0.0.1:9187/metrics || exit 1"]
       interval: 15s

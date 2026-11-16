@@ -1,4 +1,4 @@
-# Grafana on 127.0.0.1:3000 (host network, reads Prometheus on 127.0.0.1:9090).
+# Grafana on 127.0.0.1:13000 (host network, reads Prometheus on 127.0.0.1:19090).
 # provisioning/ wires the datasource and the dashboard folder; dashboards/ holds the JSON.
 
 x-logging: &logging
@@ -18,7 +18,7 @@ services:
         condition: service_healthy
     environment:
       GF_SERVER_HTTP_ADDR: 127.0.0.1
-      GF_SERVER_HTTP_PORT: "3000"
+      GF_SERVER_HTTP_PORT: "13000"
       GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
       GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?set GRAFANA_ADMIN_PASSWORD in env/stack.env}
       GF_SECURITY_ALLOW_EMBEDDING: "true"
@@ -32,7 +32,7 @@ services:
       - ./dashboards:/etc/grafana/dashboards:ro
       - grafana-data:/var/lib/grafana
     healthcheck:
-      test: [CMD-SHELL, "wget -qO /dev/null http://127.0.0.1:3000/api/health || exit 1"]
+      test: [CMD-SHELL, "wget -qO /dev/null http://127.0.0.1:13000/api/health || exit 1"]
       interval: 15s
       timeout: 5s
       retries: 10

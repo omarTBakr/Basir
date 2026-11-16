@@ -12,7 +12,7 @@ import pytest
 from basir.api import embed
 from basir.api.embed import create_proxy_app, frame_ancestors
 
-UPSTREAM = "http://127.0.0.1:5000"
+UPSTREAM = "http://127.0.0.1:15000"
 
 
 class Recorder:
@@ -35,8 +35,8 @@ def upstream() -> Recorder:
 
 @pytest.fixture
 def proxy(upstream: Recorder) -> Iterator[TestClient]:
-    app = create_proxy_app(UPSTREAM, console_port=8000, transport=httpx.MockTransport(upstream))
-    with TestClient(app, base_url="http://127.0.0.1:8002") as client:
+    app = create_proxy_app(UPSTREAM, console_port=18000, transport=httpx.MockTransport(upstream))
+    with TestClient(app, base_url="http://127.0.0.1:18002") as client:
         yield client
 
 
@@ -48,10 +48,10 @@ def test_frame_headers_allow_only_the_console(proxy: TestClient, upstream: Recor
     response = proxy.get("/")
     assert "x-frame-options" not in response.headers
     csp = response.headers["content-security-policy"]
-    assert csp == "default-src 'self'; img-src *; " + frame_ancestors(8000)
-    assert frame_ancestors(8000) == "frame-ancestors http://127.0.0.1:8000 http://localhost:8000"
+    assert csp == "default-src 'self'; img-src *; " + frame_ancestors(18000)
+    assert frame_ancestors(18000) == "frame-ancestors http://127.0.0.1:18000 http://localhost:18000"
     upstream.answer_headers = []
-    assert proxy.get("/").headers["content-security-policy"] == frame_ancestors(8000)  # added when missing
+    assert proxy.get("/").headers["content-security-policy"] == frame_ancestors(18000)  # added when missing
 
 
 def test_upstream_gets_its_own_host_and_nothing_host_like_from_the_client(
@@ -62,13 +62,13 @@ def test_upstream_gets_its_own_host_and_nothing_host_like_from_the_client(
         "forwarded": "host=evil.example",
         "x-forwarded-for": "6.6.6.6",
         "x-real-ip": "6.6.6.6",
-        "origin": "http://127.0.0.1:8002",
-        "referer": "http://127.0.0.1:8002/x",
+        "origin": "http://127.0.0.1:18002",
+        "referer": "http://127.0.0.1:18002/x",
         "cookie": "mlflow=1",
     }
     proxy.post("/ajax-api/2.0/mlflow/runs/delete", json={"run_id": "r"}, headers=spoof)
     sent = upstream.requests[-1]
-    assert sent.headers["host"] == "127.0.0.1:5000" and sent.url.netloc == b"127.0.0.1:5000"
+    assert sent.headers["host"] == "127.0.0.1:15000" and sent.url.netloc == b"127.0.0.1:15000"
     assert sent.headers["origin"] == UPSTREAM and sent.headers["referer"] == UPSTREAM + "/"
     for name in ("x-forwarded-host", "forwarded", "x-forwarded-for", "x-real-ip"):
         assert name not in sent.headers
@@ -84,7 +84,7 @@ def test_upstream_gets_its_own_host_and_nothing_host_like_from_the_client(
 def test_paths_never_leave_the_upstream(proxy: TestClient, upstream: Recorder, path: str) -> None:
     proxy.get(path)
     sent = upstream.requests[-1]
-    assert sent.url.scheme == "http" and sent.url.host == "127.0.0.1" and sent.url.port == 5000
+    assert sent.url.scheme == "http" and sent.url.host == "127.0.0.1" and sent.url.port == 15000
 
 
 @pytest.mark.parametrize(
@@ -131,14 +131,14 @@ def test_only_needed_methods(proxy: TestClient) -> None:
 
 
 def test_host_and_origin_checks(proxy: TestClient, upstream: Recorder) -> None:
-    for host in ("evil.example", "evil.example:8002", "192.168.1.20:8002"):
+    for host in ("evil.example", "evil.example:18002", "192.168.1.20:18002"):
         assert proxy.get("/", headers={"host": host}).status_code == 400, host  # DNS rebinding
-    assert proxy.get("/", headers={"host": "localhost:8002"}).status_code == 200
+    assert proxy.get("/", headers={"host": "localhost:18002"}).status_code == 200
     count = len(upstream.requests)
     assert proxy.post("/x", headers={"origin": "http://evil.example"}).status_code == 403
-    assert proxy.post("/x", headers={"origin": "http://127.0.0.1:8000"}).status_code == 403  # the Console != proxy
+    assert proxy.post("/x", headers={"origin": "http://127.0.0.1:18000"}).status_code == 403  # the Console != proxy
     assert len(upstream.requests) == count
-    assert proxy.post("/x", headers={"origin": "http://127.0.0.1:8002"}).status_code == 200
+    assert proxy.post("/x", headers={"origin": "http://127.0.0.1:18002"}).status_code == 200
 
 
 def test_body_limit(proxy: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:

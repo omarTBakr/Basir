@@ -1,6 +1,6 @@
 """Plug-and-play pairing: a phone asks to join over Wi-Fi, you approve it on the Devices tab, it gets its token.
 
-    phone                                  laptop (phone listener, :8001)          Devices tab
+    phone                                  laptop (phone listener, :18001)          Devices tab
     ─────                                  ──────────────────────────────          ───────────
     POST /pair {"device", "label"}   ──▶   pending request, 4-digit code    ──▶   "realme-14 wants in, code 4821"
     GET /pair/{id} (poll every 1 s)  ◀──   {"status": "pending"}                   [Approve] [Deny]

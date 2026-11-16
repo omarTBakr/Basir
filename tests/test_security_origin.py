@@ -17,22 +17,22 @@ from basir.api.metrics import HTTP_REQUESTS
 from basir.api.middleware import ip_or_local_host, same_origin
 
 EVIL = "http://evil.example"
-PHONE_WS = "ws://192.168.1.20:8001"  # TestClient sockets ignore base_url, so give the host in full
+PHONE_WS = "ws://192.168.1.20:18001"  # TestClient sockets ignore base_url, so give the host in full
 SOCKETS = ("/ws/view/realme-14", "/ws/map/realme-14", "/ws/stream/realme-14")
 
 
 @pytest.fixture
 def phones(client: TestClient) -> Iterator[TestClient]:
     """The phone listener sharing `client`'s state, reached by IP as a phone would."""
-    with TestClient(create_ingest_app(client.app), base_url="http://192.168.1.20:8001") as phone:  # type: ignore[arg-type]
+    with TestClient(create_ingest_app(client.app), base_url="http://192.168.1.20:18001") as phone:  # type: ignore[arg-type]
         yield phone
 
 
 def test_console_refuses_foreign_hosts(client: TestClient) -> None:
     assert client.get("/live").status_code == 200
-    for host in ("127.0.0.1:8000", "localhost:8000"):
+    for host in ("127.0.0.1:18000", "localhost:18000"):
         assert client.get("/live", headers={"host": host}).status_code == 200
-    for host in ("evil.example", "evil.example:8000", "192.168.1.20:8000", "127.0.0.1.nip.io:8000"):
+    for host in ("evil.example", "evil.example:18000", "192.168.1.20:18000", "127.0.0.1.nip.io:18000"):
         assert client.get("/live", headers={"host": host}).status_code == 400, host
     with (
         pytest.raises(WebSocketDisconnect),
@@ -88,9 +88,9 @@ def test_console_on_a_real_port_matches_origin_with_port(live_server: str) -> No
 
 def test_phone_listener_hosts(phones: TestClient) -> None:
     assert phones.get("/healthz").status_code == 200
-    for host in ("192.168.1.20:8001", "10.42.0.1:8001", "[fe80::1]:8001", "localhost:8001", "laptop.local:8001"):
+    for host in ("192.168.1.20:18001", "10.42.0.1:18001", "[fe80::1]:18001", "localhost:18001", "laptop.local:18001"):
         assert phones.get("/healthz", headers={"host": host}).status_code == 200, host
-    for host in ("evil.example", "evil.example:8001", "192.168.1.20.nip.io:8001", ""):
+    for host in ("evil.example", "evil.example:18001", "192.168.1.20.nip.io:18001", ""):
         assert phones.get("/healthz", headers={"host": host}).status_code == 400, host
 
 
@@ -98,7 +98,7 @@ def test_phone_listener_refuses_cross_site_pairing_and_sockets(phones: TestClien
     ask = {"device": "realme-14", "label": "realme 14"}
     assert phones.post("/pair", json=ask, headers={"origin": EVIL}).status_code == 403
     assert phones.post("/pair", json=ask, headers={"sec-fetch-site": "cross-site"}).status_code == 403
-    own = phones.post("/pair", json=ask, headers={"origin": "https://192.168.1.20:8001"})
+    own = phones.post("/pair", json=ask, headers={"origin": "https://192.168.1.20:18001"})
     assert own.status_code == 200 and own.json()["status"] == "pending"
     with (
         pytest.raises(WebSocketDisconnect) as refused,
@@ -119,12 +119,12 @@ def test_phone_listener_has_request_ids_and_metrics(phones: TestClient, caplog: 
 
 
 def test_same_origin_rules() -> None:
-    assert same_origin({}, "127.0.0.1:8000")  # no Origin, no Sec-Fetch-Site: not a browser
-    assert same_origin({b"origin": b"http://127.0.0.1:8000"}, "127.0.0.1:8000")
-    assert same_origin({b"origin": b"https://192.168.1.2:8001"}, "192.168.1.2:8001")
-    assert not same_origin({b"origin": b"http://127.0.0.1:8000"}, "127.0.0.1:8001")
-    assert not same_origin({b"origin": b"null"}, "127.0.0.1:8000")
-    assert not same_origin({b"origin": b"file://"}, "127.0.0.1:8000")
-    assert not same_origin({b"sec-fetch-site": b"same-site"}, "127.0.0.1:8000")
-    assert ip_or_local_host("192.168.1.2:8001") and ip_or_local_host("[::1]:8001")
+    assert same_origin({}, "127.0.0.1:18000")  # no Origin, no Sec-Fetch-Site: not a browser
+    assert same_origin({b"origin": b"http://127.0.0.1:18000"}, "127.0.0.1:18000")
+    assert same_origin({b"origin": b"https://192.168.1.2:18001"}, "192.168.1.2:18001")
+    assert not same_origin({b"origin": b"http://127.0.0.1:18000"}, "127.0.0.1:18001")
+    assert not same_origin({b"origin": b"null"}, "127.0.0.1:18000")
+    assert not same_origin({b"origin": b"file://"}, "127.0.0.1:18000")
+    assert not same_origin({b"sec-fetch-site": b"same-site"}, "127.0.0.1:18000")
+    assert ip_or_local_host("192.168.1.2:18001") and ip_or_local_host("[::1]:18001")
     assert not ip_or_local_host("evil.example") and not ip_or_local_host("1.2.3.4.evil.example")

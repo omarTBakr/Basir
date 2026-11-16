@@ -89,11 +89,11 @@ print_urls() {
     pg_port="$(sed -n 's/^POSTGRES_PORT=//p' "$ENV_FILE")"
     cat <<EOF
 
-  MLflow          http://127.0.0.1:5000
-  Airflow         http://127.0.0.1:8080   (user admin, AIRFLOW_ADMIN_PASSWORD in env/stack.env)
-  Grafana         http://127.0.0.1:3000   (admin login in env/stack.env)
-  Prometheus      http://127.0.0.1:9090
-  Postgres        127.0.0.1:${pg_port:-5433}
+  MLflow          http://127.0.0.1:15000
+  Airflow         http://127.0.0.1:18080   (user admin, AIRFLOW_ADMIN_PASSWORD in env/stack.env)
+  Grafana         http://127.0.0.1:13000   (admin login in env/stack.env)
+  Prometheus      http://127.0.0.1:19090
+  Postgres        127.0.0.1:${pg_port:-15433}
 EOF
 }
 
@@ -101,8 +101,8 @@ print_targets() {
     local targets
     echo
     echo "Prometheus targets:"
-    if ! targets="$(curl -sf http://127.0.0.1:9090/api/v1/targets)"; then
-        echo "  Prometheus is not answering on :9090"
+    if ! targets="$(curl -sf http://127.0.0.1:19090/api/v1/targets)"; then
+        echo "  Prometheus is not answering on :19090"
         return
     fi
     python3 -c '

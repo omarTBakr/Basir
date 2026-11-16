@@ -14,4 +14,4 @@ exec mlflow server \
     --default-artifact-root mlflow-artifacts:/ \
     --host 0.0.0.0 \
     --port 5000 \
-    --allowed-hosts "localhost,localhost:5000,127.0.0.1,127.0.0.1:5000,mlflow,mlflow:5000"
+    --allowed-hosts "localhost,localhost:5000,localhost:15000,127.0.0.1,127.0.0.1:5000,127.0.0.1:15000,mlflow,mlflow:5000"

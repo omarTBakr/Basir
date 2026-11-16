@@ -24,13 +24,13 @@ from basir.api.tokens import DAY_S, TokenStore
 from tests.conftest import LanServer
 from tests.test_ingest import JPEG
 
-PHONE_WS = "ws://192.168.1.20:8001"  # TestClient sockets ignore base_url, so give the host in full
+PHONE_WS = "ws://192.168.1.20:18001"  # TestClient sockets ignore base_url, so give the host in full
 FRAME = encode_frame(FrameHeader(seq=0, timestamp=1.0), JPEG)
 
 
 @pytest.fixture
 def phones(client: TestClient) -> Iterator[TestClient]:
-    with TestClient(create_ingest_app(client.app), base_url="http://192.168.1.20:8001") as phone:  # type: ignore[arg-type]
+    with TestClient(create_ingest_app(client.app), base_url="http://192.168.1.20:18001") as phone:  # type: ignore[arg-type]
         yield phone
 
 

@@ -1,6 +1,6 @@
 """The Basir Console: phone ingest, live view, live map, Prometheus `/metrics` and the web UI in one app.
 
-    python scripts/serve.py      # Console on 127.0.0.1:8000 + phone listener on the LAN (:8001)
+    python scripts/serve.py      # Console on 127.0.0.1:18000 + phone listener on the LAN (:18001)
 
 The lifespan starts the GPU worker process and the batcher, and stops them (and the live
 map fusion tasks) on shutdown. `basir.api.ingest.create_ingest_app` serves the phone

@@ -124,7 +124,7 @@ Basir/
 │   ├── replay.py                   # real-time RGB-D playback window
 │   ├── visualize_pointcloud.py     # the Phase 0 check
 │   ├── run_pipeline.py             # trigger a pipeline (Airflow DAG) and print its links
-│   ├── serve.py                    # Console :8000 (loopback), phone listener :8001 (LAN), embeds :8002/:8003
+│   ├── serve.py                    # Console :18000 (loopback), phone listener :18001 (LAN), embeds :18002/:18003
 │   ├── simulate_phones.py          # N simulated phones streaming a dataset
 │   └── stack.sh                    # local stack: up / down / status / logs
 ├── Docker/                         # the local stack: docker-compose.yml + one folder per service

@@ -25,10 +25,10 @@ def test_probe_up_and_down(file_server: FileServer) -> None:
 
 def test_scrape_status_reads_the_basir_job(file_server: FileServer) -> None:
     key = "api/v1/targets?state=active"
-    up = {"labels": {"job": "basir"}, "health": "up", "scrapeUrl": "http://127.0.0.1:8000/metrics", "lastError": ""}
+    up = {"labels": {"job": "basir"}, "health": "up", "scrapeUrl": "http://127.0.0.1:18000/metrics", "lastError": ""}
     file_server.files[key] = targets({"labels": {"job": "node"}, "health": "up"}, up)
     status = asyncio.run(scrape_status(file_server.base_url))
-    assert status.up and "127.0.0.1:8000/metrics: up" in status.detail
+    assert status.up and "127.0.0.1:18000/metrics: up" in status.detail
 
     file_server.files[key] = targets({**up, "health": "down", "lastError": "connection refused"})
     status = asyncio.run(scrape_status(file_server.base_url))

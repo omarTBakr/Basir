@@ -1,4 +1,4 @@
-# Host metrics on 127.0.0.1:9101. Host network and pid so it sees the laptop's real
+# Host metrics on 127.0.0.1:19101. Host network and pid so it sees the laptop's real
 # interfaces and processes; runs as the desktop user (HOST_UID, exported by scripts/stack.sh).
 
 x-logging: &logging
@@ -17,11 +17,11 @@ services:
     user: ${HOST_UID:-1000}  # the desktop user, so it can stat drives under /run/media/<user>
     command:
       - --path.rootfs=/host
-      - --web.listen-address=127.0.0.1:9101
+      - --web.listen-address=127.0.0.1:19101
     volumes:
       - /:/host:ro,rslave
     healthcheck:
-      test: [CMD-SHELL, "wget -qO /dev/null http://127.0.0.1:9101/metrics || exit 1"]
+      test: [CMD-SHELL, "wget -qO /dev/null http://127.0.0.1:19101/metrics || exit 1"]
       interval: 15s
       timeout: 5s
       retries: 5

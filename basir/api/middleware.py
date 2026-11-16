@@ -73,7 +73,7 @@ SAFE_FETCH_SITES = frozenset({b"same-origin", b"none"})
 
 
 def _host_only(netloc: str) -> str:
-    """`127.0.0.1:8000` -> `127.0.0.1`, `[::1]:8000` -> `[::1]` (lower-case)."""
+    """`127.0.0.1:18000` -> `127.0.0.1`, `[::1]:18000` -> `[::1]` (lower-case)."""
     netloc = netloc.strip().lower()
     if netloc.startswith("["):
         return netloc[: netloc.find("]") + 1]

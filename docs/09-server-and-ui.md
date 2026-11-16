@@ -7,7 +7,7 @@ The code is in [`basir/api`](../basir/api/__init__.py).
 ## Run it
 
 ```bash
-uv run python scripts/serve.py                         # Console http://127.0.0.1:8000 + phone listener https://<lan-ip>:8001
+uv run python scripts/serve.py                         # Console http://127.0.0.1:18000 + phone listener https://<lan-ip>:18001
 uv run python scripts/serve.py --no-lan                # no phone listener on the LAN
 ```
 
@@ -19,10 +19,10 @@ On start-up the app spawns the GPU worker and waits until its model is loaded, t
 
 | Listener | Address | Serves |
 |---|---|---|
-| Console | `127.0.0.1:8000` | Every page, `/metrics`, the Live and map sockets, and `/ws/stream` **without** a token for local programs (the simulator); browsers on other sites are refused (see [Security](#security)) |
-| Phones | `INGEST_HOST:INGEST_PORT` (`0.0.0.0:8001`), HTTPS | Only the phone page (`/`), pairing (`/pair`), `/ws/stream/{device_id}` (token required) and `/healthz` |
-| MLflow UI | `127.0.0.1:8002` | A frameable copy of MLflow for the Experiments tab |
-| Airflow UI | `127.0.0.1:8003` | A frameable copy of the Airflow UI for the Pipelines tab |
+| Console | `127.0.0.1:18000` | Every page, `/metrics`, the Live and map sockets, and `/ws/stream` **without** a token for local programs (the simulator); browsers on other sites are refused (see [Security](#security)) |
+| Phones | `INGEST_HOST:INGEST_PORT` (`0.0.0.0:18001`), HTTPS | Only the phone page (`/`), pairing (`/pair`), `/ws/stream/{device_id}` (token required) and `/healthz` |
+| MLflow UI | `127.0.0.1:18002` | A frameable copy of MLflow for the Experiments tab |
+| Airflow UI | `127.0.0.1:18003` | A frameable copy of the Airflow UI for the Pipelines tab |
 
 All four run in one process and share one state (frame queues, devices, live maps), built by `basir.api.app.create_app`; `basir.api.ingest.create_ingest_app` and `basir.api.embed.create_proxy_app` make the other three. Nothing but the phone stream is reachable from the network.
 
@@ -30,7 +30,7 @@ All four run in one process and share one state (frame queues, devices, live map
 
 Nothing is installed on the phone: the phone listener serves a **phone page** that pairs and streams from Chrome ([`basir/api/phone`](../basir/api/phone/index.html)). The **Devices** tab walks through it one step at a time and moves to the next step by itself:
 
-1. **Open Basir on the phone.** Same Wi-Fi as the laptop; scan the QR code on the Devices tab (it holds `https://<lan-ip>:8001/`). Chrome warns once about the self-signed certificate: *Advanced*, *Proceed*. The step completes when the phone opens the page.
+1. **Open Basir on the phone.** Same Wi-Fi as the laptop; scan the QR code on the Devices tab (it holds `https://<lan-ip>:18001/`). Chrome warns once about the self-signed certificate: *Advanced*, *Proceed*. The step completes when the phone opens the page.
 2. **Approve the phone.** The page asks to pair (`POST /pair` with its device ID) and shows a 4-digit code; the Devices tab shows the same code with **Approve** / **Deny**. On approval the phone collects its token (`GET /pair/{id}`, handed over once) and keeps it in the browser.
 3. **Start streaming on the phone.** **Start AR stream** sends colour, depth and the phone's position (WebXR `immersive-ar` with `camera-access` and `depth-sensing`, about 5 frames/s); **Start camera stream** sends colour only (any browser, about 10 frames/s).
 4. **Done.** Links to Live and the 3D map. Next time the phone opens the page with its stored token and only has to tap Start; a forgotten phone pairs again by itself.
@@ -45,7 +45,7 @@ Nothing is installed on the phone: the phone listener serves a **phone page** th
 
 **Which network.** The phone joins the same Wi-Fi as the laptop: the router the laptop is on, or a hotspot the laptop shares. The Devices tab shows one QR code per network the laptop is on, and the certificate covers every one of those addresses.
 
-**Firewall.** On Fedora, a hotspot the laptop shares (NetworkManager zone `nm-shared`) blocks its clients until the port is allowed once: `sudo firewall-cmd --zone=nm-shared --add-port=8001/tcp` (add `--permanent` to keep it). For the router's network the Workstation zone already allows high ports; otherwise `sudo firewall-cmd --add-port=8001/tcp`. "This site can't be reached" on the phone means the firewall or the network, not the page.
+**Firewall.** On Fedora, a hotspot the laptop shares (NetworkManager zone `nm-shared`) blocks its clients until the port is allowed once: `sudo firewall-cmd --zone=nm-shared --add-port=18001/tcp` (add `--permanent` to keep it). For the router's network the Workstation zone already allows high ports; otherwise `sudo firewall-cmd --add-port=18001/tcp`. "This site can't be reached" on the phone means the firewall or the network, not the page.
 
 **Embedded MLflow and Airflow.** MLflow sends `X-Frame-Options: SAMEORIGIN` and both UIs load assets from absolute paths, so the Console can neither frame them directly nor host them under a prefix. Each gets its own loopback port that forwards requests and replaces the upstream frame headers with a CSP `frame-ancestors` that names only the Console's origins ([`embed.py`](../basir/api/embed.py), see [Security](#security)). The MLflow copy runs only when `MLFLOW_TRACKING_URI` is an HTTP server. Airflow's UI works at the root of its port with no `base_url` set (it takes its base path from the request); log in once inside the frame as `admin`, and the session cookie (127.0.0.1, `SameSite=Lax`) is shared with the Console's site.
 
@@ -120,7 +120,7 @@ Each phone that sends **depth, pose and intrinsics** gets a live map ([`mapping.
 | `--dataset` | `fr1/desk` | Preset key or dataset folder |
 | `--duration` | 30 | Seconds to stream |
 | `--max-frames` | 300 | Frames loaded and looped |
-| `--url` | `ws://127.0.0.1:8000` | Server WebSocket base URL |
+| `--url` | `ws://127.0.0.1:18000` | Server WebSocket base URL |
 
 It prints per phone: frames sent and fps, results, dropped, errors, mean and max batch size, server latency p50 / p95 and round trip p50 / p95.
 

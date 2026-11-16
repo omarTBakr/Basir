@@ -6,8 +6,8 @@ autonumber "<b>0"
 actor User as user
 participant "Phone page\n(Chrome on the phone)" as page
 participant "WebXR session\n(immersive-ar: camera-access, depth-sensing)" as xr
-participant "Phone listener\n(https://<LAN IP>:8001)" as listener
-participant "Console\n(127.0.0.1:8000)" as console
+participant "Phone listener\n(https://<LAN IP>:18001)" as listener
+participant "Console\n(127.0.0.1:18000)" as console
 
 user -> page : open the QR-code URL from the Devices tab
 page -> listener : GET / (phone page); pair once (see phone_pairing)

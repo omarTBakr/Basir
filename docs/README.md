@@ -14,7 +14,7 @@ One page per feature that's built, and a placeholder for each one that isn't. St
 | [06 Experiment tracking and tracing](06-experiment-tracking.md) | MLflow experiments, standard tags, parent / child pipeline runs and their tag schema; Langfuse tracing |
 | [07 Pipelines](07-pipelines.md) | The Airflow DAG `phase0`, its tasks and retries, `run_pipeline.py`, `dag.json`, adding a DAG |
 | [08 Local stack](08-local-stack.md) | Docker Compose services and ports, native Docker Engine for the GPU, stack settings, Grafana dashboards and panel ids |
-| [09 Server and UI](09-server-and-ui.md) | FastAPI on :8000, the `/ws/stream/{device_id}` protocol, latest-frame queues, micro-batching, the GPU worker, `basir_*` metrics, the four pages |
+| [09 Server and UI](09-server-and-ui.md) | FastAPI on :18000, the `/ws/stream/{device_id}` protocol, latest-frame queues, micro-batching, the GPU worker, `basir_*` metrics, the four pages |
 | [10 Async processing](10-async-processing.md) | Why live frames use asyncio and pipelines use Airflow, and why not Celery |
 | [11 Testing and code quality](11-testing.md) | pytest and the `network` marker, fixtures, ruff, mypy, CI and pre-commit |
 | [12 Architecture and project structure](12-architecture.md) | Module map, the design rules, the file tree |

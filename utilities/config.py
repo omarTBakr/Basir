@@ -49,15 +49,15 @@ class Settings(BaseModel):
     langfuse_base_url: str | None = Field(default=None, description="Langfuse URL (default: Langfuse Cloud)")
 
     # Orchestration: Airflow runs the pipelines (REST API /api/v2 and web UI at the same URL)
-    airflow_url: str = Field(default="http://127.0.0.1:8080", description="Airflow API server and web UI")
+    airflow_url: str = Field(default="http://127.0.0.1:18080", description="Airflow API server and web UI")
     airflow_username: str = Field(default="admin", description="Airflow user for the REST API")
     airflow_password: str | None = Field(
         default=None, description="Its password (blank = AIRFLOW_ADMIN_PASSWORD from env/stack.env)"
     )
 
     # Server and UI: the services it summarises (all optional; shown as "not reachable" when down)
-    grafana_url: str = Field(default="http://127.0.0.1:3000", description="Grafana, embedded on the Dashboards page")
-    prometheus_url: str = Field(default="http://127.0.0.1:9090", description="Prometheus, scrapes /metrics")
+    grafana_url: str = Field(default="http://127.0.0.1:13000", description="Grafana, embedded on the Dashboards page")
+    prometheus_url: str = Field(default="http://127.0.0.1:19090", description="Prometheus, scrapes /metrics")
 
     # Live ingest: per-phone queues and the GPU worker's micro-batches
     ingest_queue_size: int = Field(default=2, ge=1, description="Frames kept per phone; older ones are dropped")
@@ -66,10 +66,10 @@ class Settings(BaseModel):
 
     # Console: the phone listener on the LAN, the live view and the live map
     ingest_host: str = Field(default="0.0.0.0", description="Interface of the phone-only listener (LAN)")
-    ingest_port: int = Field(default=8001, description="Port of the phone-only listener")
+    ingest_port: int = Field(default=18001, description="Port of the phone-only listener")
     ingest_tls: bool = Field(default=True, description="HTTPS on the phone listener (phone browsers need it)")
-    mlflow_embed_port: int = Field(default=8002, description="Loopback port that frames the MLflow UI")
-    airflow_embed_port: int = Field(default=8003, description="Loopback port that frames the Airflow UI")
+    mlflow_embed_port: int = Field(default=18002, description="Loopback port that frames the MLflow UI")
+    airflow_embed_port: int = Field(default=18003, description="Loopback port that frames the Airflow UI")
     view_max_fps: float = Field(default=15.0, gt=0, description="Most frames/s sent to a Live view")
     map_voxel_m: float = Field(default=0.02, gt=0, description="Live map voxel size in metres")
     map_keyframe_m: float = Field(default=0.05, ge=0, description="Move this far to fuse a new keyframe")

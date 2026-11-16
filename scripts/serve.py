@@ -2,12 +2,12 @@
 """Run the Basir Console: the web UI and APIs on loopback, the phone stream alone on the LAN.
 
 Listeners (one process, one shared state):
-    127.0.0.1:8000   Console: pages, /metrics, live view and map sockets, /ws/stream without a token
-    0.0.0.0:8001     phones only, HTTPS (self-signed): the phone page at /, /pair and
+    127.0.0.1:18000   Console: pages, /metrics, live view and map sockets, /ws/stream without a token
+    0.0.0.0:18001     phones only, HTTPS (self-signed): the phone page at /, /pair and
                      /ws/stream/{device_id} with the token as the first message or a Bearer
                      header (INGEST_HOST / INGEST_PORT / INGEST_TLS)
-    127.0.0.1:8002   MLflow UI, frameable copy for the Experiments tab (MLFLOW_EMBED_PORT)
-    127.0.0.1:8003   Airflow UI, frameable copy for the Pipelines tab (AIRFLOW_EMBED_PORT)
+    127.0.0.1:18002   MLflow UI, frameable copy for the Experiments tab (MLFLOW_EMBED_PORT)
+    127.0.0.1:18003   Airflow UI, frameable copy for the Pipelines tab (AIRFLOW_EMBED_PORT)
 
 Usage:
     python scripts/serve.py               # all of the above
@@ -53,7 +53,7 @@ async def serve(servers: list[uvicorn.Server]) -> None:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--port", type=int, default=8000, help="Console port (always on 127.0.0.1).")
+    parser.add_argument("--port", type=int, default=18000, help="Console port (always on 127.0.0.1).")
     parser.add_argument("--no-lan", action="store_true", help="Do not start the phone listener.")
     args = parser.parse_args(argv)
     logging.basicConfig(

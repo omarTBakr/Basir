@@ -31,7 +31,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--dataset", default="fr1/desk", help="Preset key or dataset folder.")
     parser.add_argument("--duration", type=float, default=30.0, help="Seconds to stream.")
     parser.add_argument("--max-frames", type=int, default=300, help="Frames loaded and looped.")
-    parser.add_argument("--url", default="ws://127.0.0.1:8000", help="Server WebSocket base URL.")
+    parser.add_argument("--url", default="ws://127.0.0.1:18000", help="Server WebSocket base URL.")
     args = parser.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s", datefmt="%H:%M:%S")
     if args.phones < 1:

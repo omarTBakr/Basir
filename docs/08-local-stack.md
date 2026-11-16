@@ -11,7 +11,7 @@ scripts/stack.sh logs mlflow    # follow one or more services' logs (all without
 scripts/stack.sh down           # stop; volumes are kept
 ```
 
-Then point Basir at the MLflow server with `MLFLOW_TRACKING_URI=http://127.0.0.1:5000` in `env/.env`. Without it, runs go to the local SQLite file as before (the tests always use SQLite).
+Then point Basir at the MLflow server with `MLFLOW_TRACKING_URI=http://127.0.0.1:15000` in `env/.env`. Without it, runs go to the local SQLite file as before (the tests always use SQLite).
 
 ## Native Docker Engine, for the GPU
 
@@ -49,44 +49,44 @@ env/
 
 | Service | URL | What it does |
 |---|---|---|
-| **MLflow** | http://127.0.0.1:5000 | Tracking server on Postgres; migrates its schema on start and stores artifacts in `mlartifacts/` on the host. Accepts the Host headers `127.0.0.1`, `localhost` and `mlflow` (how Airflow's tasks reach it) and rejects others (`--allowed-hosts`, MLflow's DNS-rebinding guard) |
-| **Airflow** | http://127.0.0.1:8080 | Runs the [pipelines](07-pipelines.md): web UI and REST API (`/api/v2`), user `admin`, password `AIRFLOW_ADMIN_PASSWORD` in `env/stack.env` |
-| **Grafana** | http://127.0.0.1:3000 | Dashboards; anonymous viewers allowed and embedding on, admin login in `env/stack.env` |
-| **Prometheus** | http://127.0.0.1:9090 | Scrapes the host, GPU, Postgres, Airflow and the Basir server; keeps 30 days |
-| **Postgres** | `127.0.0.1:5433` | Databases `mlflow` and `airflow` (5433 because 5432 is often taken by a system Postgres) |
-| node-exporter | `127.0.0.1:9101` | Host metrics (CPU, memory, disks incl. the data drive, network) |
-| gpu-exporter | `127.0.0.1:9835` | NVIDIA GPU metrics (`nvidia-smi`) |
-| postgres-exporter | `127.0.0.1:9187` | Postgres metrics |
-| statsd-exporter | `127.0.0.1:9102` | Airflow's StatsD metrics (UDP 9125 inside the network) as Prometheus metrics |
+| **MLflow** | http://127.0.0.1:15000 | Tracking server on Postgres; migrates its schema on start and stores artifacts in `mlartifacts/` on the host. Accepts the Host headers `127.0.0.1`, `localhost` and `mlflow` (how Airflow's tasks reach it) and rejects others (`--allowed-hosts`, MLflow's DNS-rebinding guard) |
+| **Airflow** | http://127.0.0.1:18080 | Runs the [pipelines](07-pipelines.md): web UI and REST API (`/api/v2`), user `admin`, password `AIRFLOW_ADMIN_PASSWORD` in `env/stack.env` |
+| **Grafana** | http://127.0.0.1:13000 | Dashboards; anonymous viewers allowed and embedding on, admin login in `env/stack.env` |
+| **Prometheus** | http://127.0.0.1:19090 | Scrapes the host, GPU, Postgres, Airflow and the Basir server; keeps 30 days |
+| **Postgres** | `127.0.0.1:15433` | Databases `mlflow` and `airflow` (15433 because 5432 is often taken by a system Postgres) |
+| node-exporter | `127.0.0.1:19101` | Host metrics (CPU, memory, disks incl. the data drive, network) |
+| gpu-exporter | `127.0.0.1:19835` | NVIDIA GPU metrics (`nvidia-smi`) |
+| postgres-exporter | `127.0.0.1:19187` | Postgres metrics |
+| statsd-exporter | `127.0.0.1:19102` | Airflow's StatsD metrics (UDP 9125 inside the network) as Prometheus metrics |
 
 ### Prometheus targets
 
 | Job | Target | Interval |
 |---|---|---|
-| `prometheus` | `127.0.0.1:9090` | 15 s |
-| `node` | `127.0.0.1:9101` | 15 s |
-| `gpu` | `127.0.0.1:9835` | 15 s |
-| `postgres` | `127.0.0.1:9187` | 15 s |
-| `airflow` | `127.0.0.1:9102` (statsd-exporter) | 15 s |
-| `basir` | `127.0.0.1:8000` (`/metrics`) | 5 s |
+| `prometheus` | `127.0.0.1:19090` | 15 s |
+| `node` | `127.0.0.1:19101` | 15 s |
+| `gpu` | `127.0.0.1:19835` | 15 s |
+| `postgres` | `127.0.0.1:19187` | 15 s |
+| `airflow` | `127.0.0.1:19102` (statsd-exporter) | 15 s |
+| `basir` | `127.0.0.1:18000` (`/metrics`) | 5 s |
 
-**The `basir` target is DOWN** until the Basir server runs on port 8000 (`uv run python scripts/serve.py`). That's expected. `uv run pytest -m network` checks that every other target is up.
+**The `basir` target is DOWN** until the Basir server runs on port 18000 (`uv run python scripts/serve.py`). That's expected. `uv run pytest -m network` checks that every other target is up.
 
 ```mermaid
 flowchart LR
   subgraph host["host network (127.0.0.1)"]
-    prom[Prometheus :9090]
-    graf[Grafana :3000]
-    node[node-exporter :9101]
-    app["Basir server :8000<br/>/metrics"]
+    prom[Prometheus :19090]
+    graf[Grafana :13000]
+    node[node-exporter :19101]
+    app["Basir server :18000<br/>/metrics"]
   end
   subgraph compose["compose network"]
-    pg[(Postgres :5433)]
-    mlf[MLflow :5000]
-    af["Airflow :8080<br/>api-server, scheduler,<br/>dag-processor, triggerer"]
-    sx[statsd-exporter :9102]
-    gpu[gpu-exporter :9835]
-    pge[postgres-exporter :9187]
+    pg[(Postgres :15433)]
+    mlf[MLflow :15000]
+    af["Airflow :18080<br/>api-server, scheduler,<br/>dag-processor, triggerer"]
+    sx[statsd-exporter :19102]
+    gpu[gpu-exporter :19835]
+    pge[postgres-exporter :19187]
   end
   mlf --> pg
   af --> pg
@@ -110,7 +110,7 @@ Five services from one image (`basir/airflow:3.3.2`, built from `apache/airflow:
 | Service | Does | Healthcheck |
 |---|---|---|
 | `airflow-init` | One-shot: creates the `airflow` database if the Postgres volume predates it, runs `airflow db migrate`, exits | (exits 0; the others wait for it) |
-| `airflow-api-server` | Web UI, REST API, and the Execution API the running tasks report to; `127.0.0.1:8080` | `GET /api/v2/monitor/health` |
+| `airflow-api-server` | Web UI, REST API, and the Execution API the running tasks report to; `127.0.0.1:18080` | `GET /api/v2/monitor/health` |
 | `airflow-scheduler` | Schedules runs and runs tasks with the **LocalExecutor** (at most 4 at once) | its health server on :8974 |
 | `airflow-dag-processor` | Parses `dags/` | `airflow jobs check` |
 | `airflow-triggerer` | Runs deferred tasks (none yet; part of Airflow 3's standard layout) | `airflow jobs check` |
@@ -128,7 +128,7 @@ Five services from one image (`basir/airflow:3.3.2`, built from `apache/airflow:
 | Setting | Default | Does |
 |---|---|---|
 | `POSTGRES_USER`, `POSTGRES_PASSWORD` | `basir`, random | Postgres superuser shared by MLflow and Airflow |
-| `POSTGRES_PORT` | `5433` | Host port for Postgres |
+| `POSTGRES_PORT` | `15433` | Host port for Postgres |
 | `GRAFANA_ADMIN_USER`, `GRAFANA_ADMIN_PASSWORD` | `admin`, random | Grafana admin login (anonymous visitors get the Viewer role) |
 | `MLFLOW_ARTIFACTS_DIR` | `./mlartifacts` | Host folder for MLflow artifacts |
 | `AIRFLOW_ADMIN_PASSWORD` | random | Password of Airflow's `admin` user (UI and REST API) |
@@ -143,7 +143,7 @@ Five services from one image (`basir/airflow:3.3.2`, built from `apache/airflow:
 Five dashboards are provisioned into the folder *Basir* from `Docker/grafana/dashboards/`. The Host dashboard is Grafana's home page. Embed one panel with:
 
 ```text
-http://127.0.0.1:3000/d-solo/<uid>/?orgId=1&panelId=<id>&kiosk&theme=light
+http://127.0.0.1:13000/d-solo/<uid>/?orgId=1&panelId=<id>&kiosk&theme=light
 ```
 
 | Dashboard | uid | Panels (id) |

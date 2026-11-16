@@ -9,7 +9,7 @@ is another origin, so `'self'` would block the Console). `scripts/serve.py` star
 
 Security:
 - Host: only loopback names are accepted (DNS rebinding), and the upstream always gets its own
-  Host (e.g. `127.0.0.1:5000`), Origin and Referer, so MLflow's host and CORS checks see the
+  Host (e.g. `127.0.0.1:15000`), Origin and Referer, so MLflow's host and CORS checks see the
   same request they would from a local browser tab; nothing host-like comes from the client
   (`Forwarded`, `X-Forwarded-*` are dropped).
 - Origin: cross-site POSTs are refused (`OriginGuard`).
@@ -117,9 +117,9 @@ def _request_headers(items: Iterable[tuple[str, str]], upstream: str) -> list[tu
 
 
 def create_proxy_app(
-    upstream: str, console_port: int = 8000, transport: httpx.AsyncBaseTransport | None = None
+    upstream: str, console_port: int = 18000, transport: httpx.AsyncBaseTransport | None = None
 ) -> FastAPI:
-    """An app that forwards requests to `upstream` (e.g. http://127.0.0.1:5000), frameable only by the
+    """An app that forwards requests to `upstream` (e.g. http://127.0.0.1:15000), frameable only by the
     Console on `console_port`. `transport` is for tests."""
     upstream = upstream.rstrip("/")
     ancestors = frame_ancestors(console_port)
