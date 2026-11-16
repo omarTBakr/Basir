@@ -1,4 +1,4 @@
-# NVIDIA GPU metrics (nvidia-smi) on 127.0.0.1:9835. Needs the NVIDIA container runtime
+# NVIDIA GPU metrics (nvidia-smi) on 127.0.0.1:19835. Needs the NVIDIA container runtime
 # of the native Docker Engine; Docker Desktop cannot pass the GPU through.
 
 x-logging: &logging
@@ -20,7 +20,7 @@ services:
               count: all
               capabilities: [gpu, utility]
     ports:
-      - 127.0.0.1:9835:9835
+      - 127.0.0.1:19835:9835
     healthcheck:
       test: [CMD, nvidia-smi, -L]
       interval: 15s

@@ -4,8 +4,8 @@ title Phone pairing — a phone joins over Wi-Fi and gets its token
 autonumber "<b>0"
 
 actor User as user
-participant "Console\nDevices tab (127.0.0.1:8000)" as devtab
-participant "Ingest app\n(https://<laptop LAN IP>:8001)" as ingest
+participant "Console\nDevices tab (127.0.0.1:18000)" as devtab
+participant "Ingest app\n(https://<laptop LAN IP>:18001)" as ingest
 participant "PairingRequests\n(in memory, 5 min TTL)" as pairing
 participant "TokenStore\n(devices.json, hashed, TTL 30 days)" as tokens
 participant "Phone page\n(browser on the phone)" as phone

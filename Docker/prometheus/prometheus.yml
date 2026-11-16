@@ -6,27 +6,27 @@ global:
 scrape_configs:
   - job_name: prometheus
     static_configs:
-      - targets: [127.0.0.1:9090]
+      - targets: [127.0.0.1:19090]
 
   - job_name: node
     static_configs:
-      - targets: [127.0.0.1:9101]
+      - targets: [127.0.0.1:19101]
 
   - job_name: gpu
     static_configs:
-      - targets: [127.0.0.1:9835]
+      - targets: [127.0.0.1:19835]
 
   - job_name: postgres
     static_configs:
-      - targets: [127.0.0.1:9187]
+      - targets: [127.0.0.1:19187]
 
   # Airflow's StatsD metrics, through statsd-exporter
   - job_name: airflow
     static_configs:
-      - targets: [127.0.0.1:9102]
+      - targets: [127.0.0.1:19102]
 
-  # The Basir FastAPI server; DOWN until `basir` serves on :8000.
+  # The Basir FastAPI server; DOWN until `basir` serves on :18000.
   - job_name: basir
     scrape_interval: 5s
     static_configs:
-      - targets: [127.0.0.1:8000]
+      - targets: [127.0.0.1:18000]

@@ -24,7 +24,7 @@ def test_defaults_when_explicit_file_is_missing(tmp_path: Path, clean_env: pytes
 
     s = Settings(_env_file=tmp_path / "non_existent.env")
     assert (s.app_env, s.device, s.data_dir) == ("development", "auto", None)
-    assert s.prometheus_url == "http://127.0.0.1:9090"
+    assert s.prometheus_url == "http://127.0.0.1:19090"
 
 
 def test_project_env_is_used_by_default(tmp_path: Path, clean_env: pytest.MonkeyPatch) -> None:
@@ -168,7 +168,7 @@ def test_langfuse_needs_both_keys(tmp_path: Path, clean_env: pytest.MonkeyPatch)
 
 def test_airflow_url_default_and_override(tmp_path: Path, clean_env: pytest.MonkeyPatch) -> None:
     settings = Settings(_env_file=tmp_path / "e.env")
-    assert settings.airflow_url == "http://127.0.0.1:8080"
+    assert settings.airflow_url == "http://127.0.0.1:18080"
     assert settings.airflow_username == "admin" and settings.airflow_password is None
     clean_env.setenv("BASIR_AIRFLOW_URL", "http://gpu-box:8080")
     assert Settings(_env_file=tmp_path / "e.env").airflow_url == "http://gpu-box:8080"

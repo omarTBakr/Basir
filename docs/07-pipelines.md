@@ -16,7 +16,7 @@ The code:
 
 ## Run it
 
-Start the stack first (`scripts/stack.sh up`). Airflow's UI and REST API are at `http://127.0.0.1:8080`. The user is `admin` and the password is `AIRFLOW_ADMIN_PASSWORD` in `env/stack.env`.
+Start the stack first (`scripts/stack.sh up`). Airflow's UI and REST API are at `http://127.0.0.1:18080`. The user is `admin` and the password is `AIRFLOW_ADMIN_PASSWORD` in `env/stack.env`.
 
 ```bash
 uv run python scripts/run_pipeline.py phase0 --wait               # fr1/desk + fr1/room
@@ -27,8 +27,8 @@ uv run python scripts/run_pipeline.py phase0 --datasets fr1/desk --every 10
 
 ```text
 Run       phase0-20261112-184518-3316b3
-Airflow   http://127.0.0.1:8080/dags/phase0/runs/phase0-20261112-184518-3316b3
-MLflow    http://127.0.0.1:5000/#/experiments/4/runs/2a7bf5fd4c11424cb3ac397ce46f10ad
+Airflow   http://127.0.0.1:18080/dags/phase0/runs/phase0-20261112-184518-3316b3
+MLflow    http://127.0.0.1:15000/#/experiments/4/runs/2a7bf5fd4c11424cb3ac397ce46f10ad
 PASS      fr1/desk: median 1.89 cm, 84% within 5 cm (39 frames, 100,576 points)
 PASS      fr1/room: median 1.81 cm, 82% within 5 cm (91 frames, 422,032 points)
 ```
@@ -146,7 +146,7 @@ Planned DAGs follow the same pattern: dataset preparation, post-session processi
 
 | Place | Shows |
 |---|---|
-| Airflow UI, `http://127.0.0.1:8080` | Every DAG run: the graph, each task's state, attempts, duration and **log** (Browse → Task Instances, or click a task) |
+| Airflow UI, `http://127.0.0.1:18080` | Every DAG run: the graph, each task's state, attempts, duration and **log** (Browse → Task Instances, or click a task) |
 | MLflow, experiment `phase0-pipeline` | The parent run with the DAG, and one child run per step with its params, metrics and files |
 | Console, Pipelines tab | Both at once: running DAG runs first with each task's state, then recent pipeline runs with the DAG drawn and each step coloured by its Airflow state (MLflow's `basir.status` when Airflow doesn't know the run), plus the Airflow UI embedded ([Server and UI](09-server-and-ui.md)) |
 | Grafana, *Airflow* dashboard | Scheduler heartbeat, DAG runs by state, task instances by state, task and DAG run durations, queued tasks and executor slots ([Local stack](08-local-stack.md#grafana-dashboards)) |

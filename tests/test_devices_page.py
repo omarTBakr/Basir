@@ -11,7 +11,7 @@ from basir.api.lan import lan_address, lan_addresses
 
 def test_page_shows_the_qr_link_and_step_one(client: TestClient) -> None:
     page = client.get("/devices").text
-    assert f"https://{lan_address()}:8001/" in page and "qrcode-generator@1.4.4" in page
+    assert f"https://{lan_address()}:18001/" in page and "qrcode-generator@1.4.4" in page
     steps = client.get("/partials/devices").text
     assert "Open Basir on the phone" in steps and "Waiting for the phone to open the page" in steps
 

@@ -1,5 +1,5 @@
 # StatsD -> Prometheus bridge for Airflow's metrics: StatsD on UDP 9125 (inside the network),
-# Prometheus metrics on 127.0.0.1:9102. mappings.yml names the timers and turns tags into labels.
+# Prometheus metrics on 127.0.0.1:19102. mappings.yml names the timers and turns tags into labels.
 
 x-logging: &logging
   driver: json-file
@@ -20,7 +20,7 @@ services:
     volumes:
       - ./mappings.yml:/etc/statsd-exporter/mappings.yml:ro
     ports:
-      - 127.0.0.1:9102:9102
+      - 127.0.0.1:19102:9102
     healthcheck:
       test: [CMD-SHELL, "wget -qO /dev/null http://127.0.0.1:9102/metrics || exit 1"]
       interval: 15s

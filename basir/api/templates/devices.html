@@ -15,7 +15,7 @@
     <div class="card">
       {% if net.kind == "hotspot" %}
       <strong>Phone on this laptop's hotspot</strong>
-      <p class="muted">For a phone joined to the Wi-Fi this laptop shares ({{ net.interface }}). Fedora's firewall blocks hotspot clients until you allow the port once: <code>sudo firewall-cmd --zone=nm-shared --add-port=8001/tcp</code></p>
+      <p class="muted">For a phone joined to the Wi-Fi this laptop shares ({{ net.interface }}). Fedora's firewall blocks hotspot clients until you allow the port once: <code>sudo firewall-cmd --zone=nm-shared --add-port=18001/tcp</code></p>
       {% else %}
       <strong>Phone on your router's Wi-Fi</strong>
       <p class="muted">For a phone on the same router as this laptop ({{ net.interface }}). Scan with the phone's camera app, or open the address in Chrome.</p>

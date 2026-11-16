@@ -74,7 +74,7 @@ class FakeAirflow:
 @pytest.fixture(autouse=True)
 def _mlflow_links(monkeypatch: pytest.MonkeyPatch) -> None:
     """MLflow run links without asking a server for the run's experiment."""
-    monkeypatch.setattr(run_pipeline, "mlflow_run_url", lambda run_id: f"http://127.0.0.1:5000/#/runs/{run_id}")
+    monkeypatch.setattr(run_pipeline, "mlflow_run_url", lambda run_id: f"http://127.0.0.1:15000/#/runs/{run_id}")
 
 
 def _run(fake: FakeAirflow, wait: bool, capsys: pytest.CaptureFixture[str], **params: Any) -> tuple[int, str]:
@@ -99,7 +99,7 @@ def test_trigger_and_wait_prints_the_runs_and_the_gate(
     lines = out.splitlines()
     assert lines[0] == f"Run       {run_id}" and run_id.startswith("phase0-")
     assert lines[1] == f"Airflow   http://airflow:8080/dags/phase0/runs/{run_id}"
-    assert lines[2].startswith("MLflow    http://127.0.0.1:5000/") and "abc123" in lines[2]
+    assert lines[2].startswith("MLflow    http://127.0.0.1:15000/") and "abc123" in lines[2]
     assert lines[3] == "PASS      fr1/desk: median 1.89 cm, 84% within 5 cm (40 frames, 123,456 points)"
     assert lines[4].startswith("PASS      fr1/room: median 1.81 cm, 82% within 5 cm")
 

@@ -110,7 +110,7 @@ def test_airflow_runs_basir_steps_with_host_paths(compose_config: dict[str, Any]
         assert targets[str(PROJECT_ROOT / "datasets")] == str(PROJECT_ROOT / "datasets")  # same path inside
         assert targets["/opt/basir/dags"] == str(PROJECT_ROOT / "dags")
         assert service["depends_on"]["airflow-init"]["condition"] == "service_completed_successfully"
-    assert services["airflow-api-server"]["ports"][0]["published"] == "8080"
+    assert services["airflow-api-server"]["ports"][0]["published"] == "18080"
     assert services["airflow-init"]["depends_on"]["postgres"]["condition"] == "service_healthy"
     assert "temporal" not in json.dumps(compose_config).lower()
 

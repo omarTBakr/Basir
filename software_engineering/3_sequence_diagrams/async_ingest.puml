@@ -5,7 +5,7 @@ autonumber "<b>0"
 
 participant "Phone page A\n(browser, WebXR)" as phoneA
 participant "Phone page B" as phoneB
-participant "Ingest app\n(:8001, TLS, token required)" as ingest
+participant "Ingest app\n(:18001, TLS, token required)" as ingest
 participant "TokenStore" as tokens
 queue "InProcessFrameBus\n(latest-frame queue per phone, size 2)" as bus
 participant "Batcher\n(≤ 8 frames / 20 ms)" as batcher

@@ -8,9 +8,9 @@ node "Android phones (realme 14 / 15, ARCore)" as phones {
 
 node "Laptop (Fedora, RTX 4060 8 GB)" as laptop {
   frame "scripts/serve.py (uv, Python 3.12)" as serve {
-    component "Console\n127.0.0.1:8000" as console
-    component "Phone listener\n0.0.0.0:8001 (TLS, self-signed)" as listener
-    component "Embed proxies\n127.0.0.1:8002 MLflow\n127.0.0.1:8003 Airflow" as proxies
+    component "Console\n127.0.0.1:18000" as console
+    component "Phone listener\n0.0.0.0:18001 (TLS, self-signed)" as listener
+    component "Embed proxies\n127.0.0.1:18002 MLflow\n127.0.0.1:18003 Airflow" as proxies
     component "GPU worker\n(spawned process, torch)" as worker
     console -- listener : one process,\nshared state
     console --> worker : batches over a pipe
@@ -18,16 +18,16 @@ node "Laptop (Fedora, RTX 4060 8 GB)" as laptop {
   }
 
   frame "Docker Compose project `basir` (Docker/<service>/compose.yml)" as stack {
-    database "Postgres 17\n127.0.0.1:5433\ndbs mlflow, airflow" as pg
-    component "MLflow 3.18\n127.0.0.1:5000" as mlflow
-    component "Airflow 3.3.2 api-server\n127.0.0.1:8080" as apiserver
+    database "Postgres 17\n127.0.0.1:15433\ndbs mlflow, airflow" as pg
+    component "MLflow 3.18\n127.0.0.1:15000" as mlflow
+    component "Airflow 3.3.2 api-server\n127.0.0.1:18080" as apiserver
     component "Airflow scheduler\n(LocalExecutor, 4 slots)" as scheduler
     component "Airflow dag-processor" as dagproc
     component "Airflow triggerer" as triggerer
-    component "statsd-exporter\n127.0.0.1:9102 (UDP 9125 inside)" as statsd
-    component "Prometheus 3\n127.0.0.1:9090 (host network)" as prom
-    component "Grafana 13\n127.0.0.1:3000 (host network)" as grafana
-    component "node-exporter :9101\ngpu-exporter :9835\npostgres-exporter :9187" as exporters
+    component "statsd-exporter\n127.0.0.1:19102 (UDP 9125 inside)" as statsd
+    component "Prometheus 3\n127.0.0.1:19090 (host network)" as prom
+    component "Grafana 13\n127.0.0.1:13000 (host network)" as grafana
+    component "node-exporter :19101\ngpu-exporter :19835\npostgres-exporter :19187" as exporters
 
     mlflow --> pg
     apiserver --> pg
@@ -65,8 +65,8 @@ node "Laptop (Fedora, RTX 4060 8 GB)" as laptop {
 }
 
 node "Developer's browser" as browser
-browser --> console : http://127.0.0.1:8000 (loopback only)
-phonepage --> listener : Wi-Fi / hotspot\nhttps://<LAN IP>:8001, WebSocket + token
+browser --> console : http://127.0.0.1:18000 (loopback only)
+phonepage --> listener : Wi-Fi / hotspot\nhttps://<LAN IP>:18001, WebSocket + token
 
 actor Developer as dev
 dev --> browser

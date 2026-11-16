@@ -45,12 +45,12 @@ def upstream() -> Iterator[str]:
 
 
 def test_proxy_rewrites_frame_headers_and_keeps_the_rest(upstream: str) -> None:
-    with TestClient(create_proxy_app(upstream, console_port=8000)) as client:
+    with TestClient(create_proxy_app(upstream, console_port=18000)) as client:
         response = client.get("/_app/x.js?v=1")
         assert response.status_code == 200
         assert response.text == f"path=/_app/x.js?v=1 host={upstream.removeprefix('http://')}"
         assert "x-frame-options" not in response.headers
-        assert response.headers["content-security-policy"] == frame_ancestors(8000)
+        assert response.headers["content-security-policy"] == frame_ancestors(18000)
         assert response.headers.get_list("set-cookie") == ["a=1", "b=2"]
 
         redirect = client.get("/old", follow_redirects=False)

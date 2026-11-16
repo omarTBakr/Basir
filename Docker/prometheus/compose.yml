@@ -1,5 +1,5 @@
-# Prometheus on 127.0.0.1:9090, scrape config in prometheus.yml. Host network so it can
-# reach loopback-only targets (the Basir server on :8000, node-exporter on :9101).
+# Prometheus on 127.0.0.1:19090, scrape config in prometheus.yml. Host network so it can
+# reach loopback-only targets (the Basir server on :18000, node-exporter on :19101).
 
 x-logging: &logging
   driver: json-file
@@ -17,13 +17,13 @@ services:
       - --config.file=/etc/prometheus/prometheus.yml
       - --storage.tsdb.path=/prometheus
       - --storage.tsdb.retention.time=30d
-      - --web.listen-address=127.0.0.1:9090
+      - --web.listen-address=127.0.0.1:19090
       - --web.enable-lifecycle
     volumes:
       - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - prometheus-data:/prometheus
     healthcheck:
-      test: [CMD-SHELL, "wget -qO /dev/null http://127.0.0.1:9090/-/ready || exit 1"]
+      test: [CMD-SHELL, "wget -qO /dev/null http://127.0.0.1:19090/-/ready || exit 1"]
       interval: 15s
       timeout: 5s
       retries: 10

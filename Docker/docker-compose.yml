@@ -8,7 +8,7 @@
 # Variables come from env/stack.env (passed with --env-file by scripts/stack.sh).
 #
 # Every port binds to 127.0.0.1. Prometheus, Grafana and node-exporter use the host
-# network so they can reach loopback-only services (the Basir server on :8000) and
+# network so they can reach loopback-only services (the Basir server on :18000) and
 # report the laptop's real network interfaces.
 
 name: basir

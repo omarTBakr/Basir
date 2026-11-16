@@ -49,7 +49,7 @@ scripts/stack.sh up                                    # MLflow, Airflow, Promet
 uv run python scripts/worker.py                        # in a second terminal: the pipeline worker
 uv run python scripts/run_pipeline.py phase0 --wait    # the whole check as an Airflow DAG run, both rooms
 
-uv run python scripts/serve.py                         # the Console on http://127.0.0.1:8000; then Devices → scan the QR with the phone
+uv run python scripts/serve.py                         # the Console on http://127.0.0.1:18000; then Devices → scan the QR with the phone
 ```
 
 **Prerequisites:** Linux, [uv](https://docs.astral.sh/uv/) (it installs Python 3.12), an NVIDIA GPU with a recent driver, and Docker Engine for the stack. Developed on an RTX 4060 Laptop (8 GB).

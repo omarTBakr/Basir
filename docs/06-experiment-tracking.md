@@ -7,7 +7,7 @@ Every run leaves a record. **MLflow** answers "did this change make Basir better
 | Tool | Answers | Records | Where |
 |---|---|---|---|
 | **MLflow** | "Did this change make Basir better?" | One run per script or evaluation: params, metrics, artifacts, git commit, GPU | The stack's MLflow server on Postgres, or local SQLite (`mlflow.db`); artifacts in `mlartifacts/` either way |
-| **Airflow** | "Where is this pipeline, and what failed?" | One DAG run per pipeline run: each task's state, attempts, timing and log | The [local stack](08-local-stack.md), UI on port 8080 ([Pipelines](07-pipelines.md)) |
+| **Airflow** | "Where is this pipeline, and what failed?" | One DAG run per pipeline run: each task's state, attempts, timing and log | The [local stack](08-local-stack.md), UI on port 18080 ([Pipelines](07-pipelines.md)) |
 | **Langfuse** | "What happened in this one request?" | One trace per query: each step, LLM / VLM calls, latency and cost | Langfuse Cloud for now; self-hosting later |
 | **Prometheus + Grafana** | "Is the machine keeping up?" | Host, GPU, Postgres, Airflow and Basir server metrics over time | The [local stack](08-local-stack.md) |
 
@@ -18,7 +18,7 @@ Every run leaves a record. **MLflow** answers "did this change make Basir better
 | `MLFLOW_TRACKING_URI` | Store | Artifacts |
 |---|---|---|
 | unset (default) | `sqlite:///<DATA_DIR>/mlflow.db` | `<DATA_DIR>/mlartifacts/` |
-| `http://127.0.0.1:5000` | The stack's MLflow server, on Postgres | Stored by the server in a host folder mounted into its container (`mlartifacts/` by default, `MLFLOW_ARTIFACTS_DIR` in the stack settings) |
+| `http://127.0.0.1:15000` | The stack's MLflow server, on Postgres | Stored by the server in a host folder mounted into its container (`mlartifacts/` by default, `MLFLOW_ARTIFACTS_DIR` in the stack settings) |
 
 With an `http://` URI the server UI and `run_pipeline.py` also print direct links to runs. The tests always use a temporary SQLite store.
 

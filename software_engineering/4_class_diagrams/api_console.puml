@@ -4,7 +4,7 @@ title Server and Console (basir.api) — as built
 
 package "Apps" {
   class "create_app()" as app <<FastAPI>> {
-    Console on 127.0.0.1:8000
+    Console on 127.0.0.1:18000
     lifespan: worker, bus, batcher, maps
     ..
     state.ingest: IngestState
@@ -12,13 +12,13 @@ package "Apps" {
     state.airflow: AirflowView
   }
   class "create_ingest_app()" as ingestapp <<FastAPI>> {
-    phone listener on the LAN (:8001, TLS)
+    phone listener on the LAN (:18001, TLS)
     GET /  (phone page)
     POST /pair, GET /pair/{id}
     WS /ws/stream/{device_id}
   }
   class "create_proxy_app()" as proxy <<FastAPI>> {
-    same-origin embed of MLflow (:8002) and Airflow (:8003)
+    same-origin embed of MLflow (:18002) and Airflow (:18003)
     CSP frame-ancestors, Location rewrite, 16 MiB bodies
   }
 }
