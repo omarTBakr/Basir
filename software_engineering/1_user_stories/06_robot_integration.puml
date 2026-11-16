@@ -1,0 +1,24 @@
+@startuml
+!include ../_style.iuml
+title Epic 6 — Robot integration (later phase)
+
+rectangle "Robot (ROS 2)" {
+  card US6_1 [
+    **US-6.1  "Robot, find my bottle"**
+    As a //robot operator//, I want to send a FindObject goal to the robot,
+    so that it drives to where the object was last seen.
+    ----
+    * ROS 2 action FindObject: feedback = directions, result = target pose + mask.
+    * Basir subscribes to camera, depth and /tf; publishes /basir/target_pose, /basir/mask and RViz markers.
+  ]
+  card US6_2 [
+    **US-6.2  Paths, not straight lines (L3 navigable)**
+    As a //robot operator//, I want directions that go around walls and through doors,
+    so that the robot or person can actually follow them.
+    ----
+    * The SLAM occupancy map + Nav2 plan the path to the remembered position.
+    * Tested in simulation (Isaac Sim / Gazebo) before the real robot.
+  ]
+}
+US6_1 -[hidden]down- US6_2
+@enduml

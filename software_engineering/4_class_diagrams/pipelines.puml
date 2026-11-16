@@ -1,0 +1,119 @@
+@startuml
+!include ../_style.iuml
+title Pipelines (basir.pipelines, dags/) — the Phase 0 DAG on Airflow
+
+package "dags/ (parsed by Airflow)" {
+  class "phase0.py" as dagfile <<Airflow DAG>> {
+    dag_id = phase0, schedule = None, max_active_runs = 1
+    params from PARAM_SCHEMA (Trigger form / conf)
+    ..tasks..
+    open_pipeline_run  (setup; XCom parent_run_id)
+    check_env
+    prepare_dataset  (mapped over datasets)
+    replay
+    pointcloud  (mapped over datasets)
+    gate  (retries = 0)
+    close_pipeline_run  (teardown, all_done)
+    ..
+    step_edges(dag) must equal phase0_dag().task_edges
+  }
+}
+
+package "basir.pipelines" {
+  class phase0 <<module>> {
+    PIPELINE = DAG_ID = "phase0"
+    DEFAULT_DATASETS = fr1/desk, fr1/room
+    Phase0Params, PARAM_SCHEMA, param_defaults()
+    phase0_dag(datasets): Dag
+  }
+  class Dag {
+    steps: Step
+    task_edges
+    to_json(), to_mermaid()
+  }
+  class Step {
+    name, activity, dataset
+    depends_on
+  }
+  class phase0_steps <<module>> {
+    open_pipeline_run(OpenRunInput): parent_run_id
+    check_env(ctx)
+    prepare_dataset(DatasetInput): PreparedDataset
+    replay(ReplayInput): ReplayResult
+    pointcloud(PointcloudInput): PointcloudResult
+    gate(GateInput): verdicts
+    close_pipeline_run(CloseRunInput)
+    ..
+    execute(task, payload)  — used by the runner
+    run_locally(params, workflow_id)  — no Airflow
+  }
+  class StepFailed <<exception>>
+  class GateFailed <<exception>>
+  class airflow_task <<module>> {
+    run_step(pipeline, task, payload)
+    basir_python()  — BASIR_PYTHON (/opt/basir-venv)
+    StepFailed → AirflowFailException (no retry)
+    StepCrashed → retried
+  }
+  class runner <<module>> {
+    main(argv): exit code
+    EXIT_NO_RETRY = 3
+    ERROR_MARKER "basir step failed:"
+  }
+  class AirflowClient {
+    base_url, Credentials (admin, AIRFLOW_ADMIN_PASSWORD)
+    _login(): JWT via POST /auth/token
+    trigger(dag_id, conf, run_id)
+    dag_run(), task_instances(), xcom(), task_log()
+    unpause(dag_id)
+  }
+  class airflow_client <<module>> {
+    credentials(settings, stack.env)
+    run_url(), task_url()
+  }
+}
+
+package "utilities" {
+  class experiment <<module>> {
+    open_run(), close_run()
+    start_run() (child runs: basir.step, basir.depends_on)
+    log_params / log_metrics / log_artifact
+  }
+}
+
+package "scripts" {
+  class "run_pipeline.py" as cli {
+    phase0 (options: datasets, wait)
+    prints run_id, Airflow URL, MLflow parent run
+  }
+}
+
+package "basir.ingest / basir.spatial" {
+  class "datasets, playback" as ingestpkg
+  class "pointcloud, fusion" as spatialpkg
+}
+
+dagfile ..> phase0 : PARAM_SCHEMA, phase0_dag
+dagfile ..> airflow_task : run_step
+airflow_task ..> runner : subprocess in Basir's venv
+runner ..> phase0_steps : execute(task, payload)
+phase0 *-- Dag
+Dag *-- Step
+phase0_steps ..> phase0 : Phase0Params, phase0_dag
+phase0_steps ..> experiment : parent + child MLflow runs
+phase0_steps ..> ingestpkg
+phase0_steps ..> spatialpkg
+phase0_steps --> StepFailed
+StepFailed <|-- GateFailed
+cli ..> AirflowClient
+cli ..> experiment : run_url
+airflow_client *-- AirflowClient
+
+note bottom of airflow_task
+  Two Python environments in the Airflow image: Airflow's own
+  (older FastAPI / Pydantic / SQLAlchemy) and /opt/basir-venv from
+  uv.lock with CPU torch. Tasks cross the boundary with a JSON
+  payload and a JSON result, so Basir's code never imports Airflow
+  and the DAG file imports only basir.pipelines.
+end note
+@enduml

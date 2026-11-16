@@ -1,0 +1,100 @@
+@startuml
+!include ../_style.iuml
+title Core — data model and geometry (basir.core)
+
+class CameraIntrinsics <<dataclass>> {
+  +fx, fy, cx, cy: float
+  +width, height: int
+  {field} +depth_scale: float  ' raw / depth_scale = metres (TUM 5000)
+  +K: ndarray[3x3]
+  +scaled(width, height): CameraIntrinsics
+}
+
+class Pose <<dataclass>> {
+  {field} +matrix: ndarray[4x4]  ' T_world_cam (camera -> world)
+  +timestamp: float
+  +from_tum(t, tx, ty, tz, qx, qy, qz, qw): Pose
+  +inverse(): ndarray[4x4]  ' T_cam_world
+  +rotation / position
+}
+
+class Frame <<dataclass>> {
+  +id: int
+  +timestamp: float
+  +rgb: ndarray[HxWx3]
+  +intrinsics: CameraIntrinsics
+  +depth: ndarray[HxW] | None  ' float32 metres, 0 = no reading
+  +pose: Pose | None
+}
+
+class Observation <<dataclass>> {
+  +id: str
+  +frame_id: int
+  +timestamp: float
+  +label: str
+  +bbox: tuple[int, int, int, int]
+  +mask_rle: str
+  +score: float
+  +embedding: ndarray
+  +position_world: ndarray[3] | None
+  +track_id: str | None
+}
+
+class ObjectTrack <<dataclass>> {
+  +id: str
+  +label: str
+  +caption: str | None
+  +embedding: ndarray  ' running mean, normalised
+  +position_world: ndarray[3]  ' robust running mean
+  +position_cov: float
+  +first_seen: float
+  +last_seen: float
+  +n_observations: int
+  +best_observation_id: str
+  +stale: bool
+}
+
+class ParsedQuery <<dataclass>> {
+  +object: str
+  +attributes: list[str]
+  +time_hint: str | None
+  +place_hint: str | None
+  +relation: str | None
+}
+
+class Directions <<dataclass>> {
+  +bearing_deg: float
+  +distance_m: float
+  +height_m: float
+  +text: str
+}
+
+class QueryResult <<dataclass>> {
+  +track: ObjectTrack | None
+  +score: float
+  +keyframe_path: str | None
+  +directions: Directions | None
+  +other_sightings: list[ObjectTrack]
+  +answer_text: str
+}
+
+class geometry <<module>> {
+  +quaternion_to_matrix(qx, qy, qz, qw): ndarray[3x3]
+  +make_transform(R, t) / invert_transform(T): ndarray[4x4]
+  +transform_points(T, P): ndarray[Nx3]
+  +backproject(u, v, z, K): ndarray[Nx3]
+  +project(P_cam, K): (u, v, z)
+  +depth_to_points(depth, K, stride): (P, rows, cols)
+  +frame_to_world_points(frame, stride): (P_world, colors)
+  +depth_consistency(frame_i, frame_j): DepthConsistency
+  +bearing_distance_height(p_cam): (deg, m, m)  ' Phase 3
+}
+
+Frame *-- Pose
+Frame o-- CameraIntrinsics
+Observation ..> Frame : frame_id
+Observation "many" --> "0..1" ObjectTrack : track_id
+ObjectTrack ..> Observation : best_observation_id
+QueryResult o-- ObjectTrack
+QueryResult *-- Directions
+@enduml

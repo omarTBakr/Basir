@@ -18,7 +18,7 @@
 
 > **Basir** (بصير, "the one who sees): a camera that remembers where it saw your things and walks you back to them.
 
-**▶ [See the end-to-end flow](https://github.com/omarTBakr/Basir/blob/software_engineering/software_engineering/3_sequence_diagrams/system_overview.png)** (remember → ask → directions → found it) · [Jump to the Phase 0 check](docs/05-replay-and-pointcloud.md)
+**▶ [See the end-to-end flow](software_engineering/3_sequence_diagrams/system_overview.png)** (remember → ask → directions → found it) · [Jump to the Phase 0 check](docs/05-replay-and-pointcloud.md)
 
 Basir watches a moving camera and builds a **spatial memory** of the objects it sees. Ask *"Where is my water bottle?"* and it finds the bottle in memory, even if it was seen minutes ago and is nowhere in view now. It answers with directions from where you stand ("turn right ~120°, go about 2.3 m, it's on the desk, last seen 45 s ago"), updates them as you move, and outlines the object on screen once it's back in view.
 
@@ -33,7 +33,7 @@ The stage built today is **Phase 0, the foundation**: replay a recorded RGB-D sc
 | `fr1/desk` | 1.89 cm | 84 % | ≤ 3 cm, ≥ 80 % |
 | `fr1/room` | 1.81 cm | 82 % | ≤ 3 cm, ≥ 80 % |
 
-Both pass the numbers; the final visual check is pending. The later phases are fully designed but not built yet: see [Status by phase](docs/README.md#status-by-phase). The UML (user stories, use cases, sequence and class diagrams) is on [the `software_engineering` branch](https://github.com/omarTBakr/Basir/blob/software_engineering/software_engineering/README.md).
+Both pass the numbers; the final visual check is pending. The later phases are fully designed but not built yet: see [Status by phase](docs/README.md#status-by-phase). The UML (user stories, use cases, sequence and class diagrams) is in [`software_engineering/`](software_engineering/README.md).
 
 ## Quickstart
 

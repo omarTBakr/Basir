@@ -1,0 +1,32 @@
+@startuml
+!include ../_style.iuml
+title Evaluation — replay a session and score the system
+autonumber "<b>0"
+
+actor Developer as dev
+participant "run_eval.py" as eval
+participant "DatasetSource\n(TUM / phone recording)" as src
+participant "Pipeline" as pipe
+database "MemoryStore\n(fresh per session)" as store
+participant "QueryEngine" as query
+participant "metrics" as metrics
+database "eval/datasets\n(ground truth labels)" as gt
+
+dev -> eval : run_eval --sessions all --config default.yaml
+loop each session
+  eval -> store : reset
+  eval -> src : open(session)
+  loop frames at real-time speed
+    src -> pipe : Frame{rgb, depth, K, pose (ground truth), t}
+    pipe -> store : keyframes → observations → tracks
+  end
+  eval -> gt : labelled objects + queries
+  loop each query
+    eval -> query : ask(text, pose at query time)
+    query --> eval : QueryResult
+    eval -> metrics : compare with ground truth
+  end
+end
+metrics --> eval : Recall@1 / @5, 3D error (m), bearing error (°),\nre-acquisition rate, mask IoU, latency p50 / p95
+eval --> dev : report (per phase "done when" targets)
+@enduml

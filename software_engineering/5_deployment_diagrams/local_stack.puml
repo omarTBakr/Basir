@@ -1,0 +1,82 @@
+@startuml
+!include ../_style.iuml
+title Deployment — the laptop, the Docker stack and the phones
+
+node "Android phones (realme 14 / 15, ARCore)" as phones {
+  component "Phone page\n(browser, WebXR: colour + depth + pose)" as phonepage
+}
+
+node "Laptop (Fedora, RTX 4060 8 GB)" as laptop {
+  frame "scripts/serve.py (uv, Python 3.12)" as serve {
+    component "Console\n127.0.0.1:8000" as console
+    component "Phone listener\n0.0.0.0:8001 (TLS, self-signed)" as listener
+    component "Embed proxies\n127.0.0.1:8002 MLflow\n127.0.0.1:8003 Airflow" as proxies
+    component "GPU worker\n(spawned process, torch)" as worker
+    console -- listener : one process,\nshared state
+    console --> worker : batches over a pipe
+    console --> proxies
+  }
+
+  frame "Docker Compose project `basir` (Docker/<service>/compose.yml)" as stack {
+    database "Postgres 17\n127.0.0.1:5433\ndbs mlflow, airflow" as pg
+    component "MLflow 3.18\n127.0.0.1:5000" as mlflow
+    component "Airflow 3.3.2 api-server\n127.0.0.1:8080" as apiserver
+    component "Airflow scheduler\n(LocalExecutor, 4 slots)" as scheduler
+    component "Airflow dag-processor" as dagproc
+    component "Airflow triggerer" as triggerer
+    component "statsd-exporter\n127.0.0.1:9102 (UDP 9125 inside)" as statsd
+    component "Prometheus 3\n127.0.0.1:9090 (host network)" as prom
+    component "Grafana 13\n127.0.0.1:3000 (host network)" as grafana
+    component "node-exporter :9101\ngpu-exporter :9835\npostgres-exporter :9187" as exporters
+
+    mlflow --> pg
+    apiserver --> pg
+    scheduler --> pg
+    dagproc --> pg
+    triggerer --> pg
+    scheduler --> apiserver : Execution API
+    scheduler ..> statsd : StatsD
+    apiserver ..> statsd : StatsD
+    scheduler --> mlflow : tasks log runs\n(Host mlflow:5000, --allowed-hosts)
+    prom --> statsd
+    prom --> exporters
+    grafana --> prom
+  }
+
+  folder "Project folder (USB drive, ntfs3)" as files {
+    artifact "basir/ utilities/ dags/\n(read-only in Airflow)" as code
+    artifact "datasets/ outputs/\n(same host paths in Airflow)" as data
+    artifact "mlartifacts/" as mlart
+    artifact "env/.env, env/stack.env\ndevices.json, certs/ (git-ignored)" as secrets
+  }
+  storage "Named volumes\npostgres-data, prometheus-data,\ngrafana-data, airflow-logs" as volumes
+
+  scheduler ..> code : mounts
+  scheduler ..> data : mounts
+  mlflow ..> mlart : mounts
+  pg ..> volumes
+  serve ..> secrets
+  prom --> console : scrapes /metrics (job basir, 5 s)
+  console --> mlflow : MLflowView
+  console --> apiserver : AirflowView (REST, JWT)
+  proxies --> mlflow
+  proxies --> apiserver
+  console --> grafana : embedded panels
+}
+
+node "Developer's browser" as browser
+browser --> console : http://127.0.0.1:8000 (loopback only)
+phonepage --> listener : Wi-Fi / hotspot\nhttps://<LAN IP>:8001, WebSocket + token
+
+actor Developer as dev
+dev --> browser
+dev ..> scheduler : scripts/run_pipeline.py phase0\n(REST /api/v2 through the api-server)
+
+note bottom of stack
+  scripts/stack.sh up | down | status | logs. Every port binds to 127.0.0.1.
+  Secrets (Postgres, Grafana, Airflow admin / Fernet / JWT / API) are generated
+  once into env/stack.env. Prometheus, Grafana and node-exporter use the host
+  network so they can reach loopback-only targets and see the real interfaces.
+  GPU work stays on the laptop's Python process; Airflow tasks run on CPU.
+end note
+@enduml

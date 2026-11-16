@@ -1,0 +1,55 @@
+@startuml
+!include ../_style.iuml
+title Live map — fusing a phone's RGB-D frames into a voxel map while it streams
+autonumber "<b>0"
+
+participant "Ingest app\n/ws/stream/{device_id}" as ingest
+participant "MapManager\n(one MapSession per phone, ≤ MAP_MAX_SESSIONS)" as manager
+participant "MapSession\nfuse task + subscribers" as session
+participant "VoxelMap\n(basir.spatial, 2 cm voxels)" as voxels
+participant "Console Map tab\n/ws/map/{device_id}" as viewer
+database "outputs/live_map/\n+ MLflow (console-live-map)" as store
+
+== Frames arrive ==
+loop each frame with pose and depth
+  ingest -> manager : submit(QueuedFrame)
+  manager -> manager : session(device) — create if missing,\nevict the idlest map if at the limit
+  manager -> session : latest frame (older one replaced)
+  session -> session : keyframe gate: moved ≥ 5 cm or turned ≥ 5°\nsince the last fused pose?
+  alt new keyframe
+    session -> voxels : frame_points(frame) → integrate(xyz, rgb)\n(≈ 160 depth columns per keyframe, run in a thread)
+    voxels --> session : new / updated points (capped at MAP_MAX_POINTS)
+    session -> viewer : broadcast(binary points chunk) to every subscriber
+    session -> session : basir_keyframes_fused, basir_map_voxels,\nbasir_map_update_seconds
+  else too little motion
+    session -> session : skip
+  end
+end
+
+== A browser watches ==
+viewer -> manager : WebSocket /ws/map/{device_id} (valid_device_id, same origin)
+manager -> session : subscribe
+session --> viewer : meta{voxel size, points, keyframes, trajectory}
+session --> viewer : snapshot: the whole map in chunks of 200 000 points
+loop while streaming
+  session --> viewer : incremental point chunks + updated meta
+end
+
+== Controls ==
+viewer -> manager : POST /api/map/{device_id}/reset
+manager -> session : clear voxels and trajectory
+viewer -> manager : POST /api/map/{device_id}/save
+manager -> store : .ply (≤ 600 000 points) + trajectory,\nlogged as an MLflow run in console-live-map
+viewer -> manager : GET /api/map/runs, /api/map/runs/{run_id}/cloud
+manager -> store : point clouds of earlier runs\n(phase0-pointcloud, console-live-map)
+store --> viewer : binary points for the 3D viewer
+
+== Lifetime ==
+ingest -> manager : disconnected(device_id) when the phone leaves
+manager -> manager : janitor: evict_idle() — no frames and no viewers\nfor MAP_IDLE_TTL_S (600 s) frees the map
+note over manager
+  The map runs on the Console's event loop: fusion is offloaded to a
+  thread per keyframe, viewers get a bounded queue (64 messages) so a
+  slow browser never blocks the phone's frames.
+end note
+@enduml

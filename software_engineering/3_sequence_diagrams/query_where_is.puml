@@ -1,0 +1,43 @@
+@startuml
+!include ../_style.iuml
+title Query — "where is the black charger?"
+autonumber "<b>0"
+
+actor User as user
+participant "Phone app" as phone
+participant "FastAPI server" as api
+participant "QueryParser" as parser
+participant "LLM\n(structured output)" as llm
+participant "Retriever" as ret
+participant "Embedder\n(SigLIP 2 text)" as emb
+database "MemoryStore\n(Qdrant)" as store
+participant "Reranker\n(VLM)" as rr
+participant "DirectionsPlanner" as dir
+participant "LocalizationProvider" as loc
+
+user -> phone : question
+phone -> api : query(text)
+api -> parser : parse(text)
+parser -> llm : extract object, attributes, time, place, relation
+llm --> parser : ParsedQuery{object: charger, attributes: [black], ...}
+api -> ret : retrieve(ParsedQuery)
+ret -> emb : embed_text("black charger")
+emb --> ret : text vector
+ret -> store : vector search + label / caption keywords + time filter
+store --> ret : top-k ObjectTracks
+alt no candidates
+  api --> phone : "I haven't seen a black charger yet."
+else candidates
+  api -> rr : rerank(query, best crop of each track)
+  rr --> api : verification scores
+  api -> api : score = w1·sim + w2·verify + w3·recency − w4·stale
+  api -> loc : current pose T_world_cam
+  api -> dir : directions(track.position_world, pose)
+  dir -> dir : p_cam = T⁻¹ · p_world; bearing = atan2(x, z);\ndistance = ‖(x, z)‖; height = −y
+  dir --> api : "turn left ~90°, ~1.8 m, waist height"
+  api --> phone : answer + keyframe with mask + directions
+  opt older sightings elsewhere
+    api --> phone : "also seen in the kitchen 10 min ago"
+  end
+end
+@enduml

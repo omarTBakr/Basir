@@ -1,0 +1,70 @@
+@startuml
+!include ../_style.iuml
+title Pipelines — Phase 0 as an Airflow DAG, mirrored in MLflow and the Console
+autonumber "<b>0"
+
+actor Developer as dev
+participant "run_pipeline.py\n(AirflowClient)" as cli
+participant "Airflow api-server\n(:8080, REST /api/v2)" as api
+participant "Airflow scheduler\n(LocalExecutor, 4 slots)" as sched
+participant "Task → runner\n(/opt/basir-venv, Basir's own deps)" as task
+participant "phase0_steps" as steps
+database "MLflow\n(mlflow:5000 → Postgres)" as mlflow
+participant "statsd-exporter →\nPrometheus → Grafana" as metrics
+participant "Console Pipelines tab\n(AirflowView)" as console
+
+== Trigger ==
+dev -> cli : run_pipeline.py phase0 (options: datasets, wait)
+cli -> api : POST /auth/token {admin, AIRFLOW_ADMIN_PASSWORD}
+api --> cli : JWT
+cli -> api : POST /dags/phase0/dagRuns {conf: params}
+api --> cli : run_id
+cli --> dev : run_id, Airflow run URL
+
+== The DAG run ==
+sched -> task : open_pipeline_run (setup)
+task -> steps : open_pipeline_run(params, workflow_id = run_id)
+steps -> mlflow : parent run: tags basir.pipeline, basir.workflow_id, basir.status\nartifacts dag.json, dag.mmd
+mlflow --> steps : parent_run_id
+task --> sched : XCom parent_run_id, datasets
+sched -> task : check_env
+task -> steps : child run (basir.step, basir.depends_on)
+loop each dataset (mapped tasks)
+  sched -> task : prepare_dataset[dataset]
+  task -> steps : child run per dataset
+end
+sched -> task : replay (first dataset)
+par per dataset
+  sched -> task : pointcloud[dataset]
+  task -> steps : child run → outputs/<dataset>.ply, metrics
+end
+sched -> task : gate
+task -> steps : depth consistency ≤ 2 cm, coverage ≥ 80 %
+alt gate passes
+  steps --> task : verdicts
+else gate fails or a step raises StepFailed
+  task --> sched : AirflowFailException (no retry)
+end
+sched -> task : close_pipeline_run (teardown, trigger_rule all_done)
+task -> steps : close_pipeline_run(succeeded?)
+steps -> mlflow : parent run FINISHED or FAILED
+sched -> metrics : StatsD (dag_id, task_id, state as tags)\nUDP 9125 → /metrics :9102
+
+== Watch ==
+cli -> api : GET /dags/phase0/dagRuns/{run_id} (every few seconds with the wait option)
+api --> cli : state; on failure the failing task and its log line "basir step failed: …"
+cli --> dev : gate numbers (desk 1.89 cm / 84 %, room 1.81 cm / 82 %)\nMLflow parent run URL
+console -> api : GET dagRuns + taskInstances (JWT, new token after a 401)
+api --> console : runs and task states
+console -> console : colour the run's dag.json nodes\n(success / running / failed / upstream_failed / up_for_retry)
+console -> metrics : Grafana basir-airflow panel (embedded)
+
+note over task
+  Every task is one Python process: the Airflow task
+  calls basir.pipelines.airflow_task.run_step, which
+  runs basir.pipelines.runner in /opt/basir-venv with
+  the step name and a JSON payload, and reads the
+  result back. dags/phase0.py refuses to parse if its
+  edges differ from phase0_dag(), the source of dag.json.
+end note
+@enduml

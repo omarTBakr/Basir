@@ -1,0 +1,49 @@
+@startuml
+!include ../_style.iuml
+title Guidance — live directions, re-acquisition and tracking
+autonumber "<b>0"
+
+participant "Phone app" as phone
+participant "FastAPI server" as api
+participant "GuidanceLoop" as guide
+participant "DirectionsPlanner" as dir
+participant "geometry" as geo
+participant "Reacquirer" as reacq
+participant "Detector\n(Grounding DINO / SAM 3)" as det
+participant "Segmenter\n(SAM 2)" as sam
+participant "Embedder" as emb
+participant "Tracker\n(SAM 2 video)" as trk
+database "MemoryStore" as store
+
+api -> guide : start(target track)
+loop every new frame + pose
+  phone -> api : frame + pose
+  api -> guide : on_pose(frame)
+  guide -> dir : directions(target, pose)
+  guide --> phone : directions (WebSocket push)
+  guide -> geo : project(target.position_world, pose, K)
+  alt pixel inside the image and z > 0
+    guide -> reacq : search(frame, pixel, target)
+    reacq -> det : detect target text in a crop around the pixel
+    det --> reacq : box
+    reacq -> sam : box prompt
+    sam --> reacq : mask
+    reacq -> emb : embed masked crop
+    emb --> reacq : vector
+    alt similarity to target track > τ
+      reacq --> guide : found(mask)
+      guide --> phone : "Found it!" + mask
+      guide -> trk : start(frame, mask)
+      loop following frames
+        trk --> phone : propagated mask
+      end
+    else expected spot visible but object missing
+      reacq --> guide : not found
+      guide -> store : mark target stale
+      guide --> phone : "It may have moved" + next candidate
+    end
+  else outside the view
+    guide -> guide : keep guiding
+  end
+end
+@enduml

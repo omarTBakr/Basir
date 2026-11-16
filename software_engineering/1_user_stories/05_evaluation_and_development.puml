@@ -1,0 +1,42 @@
+@startuml
+!include ../_style.iuml
+title Epic 5 — Evaluation and development
+
+rectangle "Evaluation and development" {
+  card US5_1 [
+    **US-5.1  Replay datasets as if they were live**
+    As a //developer//, I want TUM RGB-D and my own recordings played back at real-time speed,
+    so that every change is tested on the same input with known ground truth.
+    ----
+    * Any source (dataset, recording, live phone) yields the same Frame{rgb, depth, K, pose, t}.
+    * A point cloud built from replayed depth + poses looks like a clean room.
+  ]
+  card US5_2 [
+    **US-5.2  Geometry is tested before anything else**
+    As a //developer//, I want unit tests for the 3D math,
+    so that wrong directions are never caused by a sign or frame mistake.
+    ----
+    * project ∘ backproject = identity; transform ∘ inverse = identity; bearing cases left / right / behind.
+  ]
+  card US5_3 [
+    **US-5.3  Measure every phase**
+    As a //developer//, I want one command that scores the system on the eval set,
+    so that I know whether a change helped.
+    ----
+    * Retrieval Recall@1 / @5, 3D error (m), bearing error (°), re-acquisition rate, mask IoU, latency p50 / p95.
+    * Eval set: ~20 sessions in 2–3 rooms, 10–20 labelled objects each, 3–5 queries per session.
+  ]
+  card US5_4 [
+    **US-5.4  Runs on my laptop**
+    As a //developer//, I want the whole server to fit an RTX 4060 with 8 GB VRAM,
+    so that I do not need extra hardware.
+    ----
+    * Light detector always on; heavy models (Grounding DINO / SAM 3, VLM rerank) only at query time.
+    * fp16 models; the LLM / VLM can be the Claude API instead of a local model.
+    * Models, venv and Qdrant on the NVMe; datasets and recordings on the HDD.
+  ]
+}
+US5_1 -[hidden]down- US5_2
+US5_2 -[hidden]down- US5_3
+US5_3 -[hidden]down- US5_4
+@enduml

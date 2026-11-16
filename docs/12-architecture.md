@@ -1,6 +1,6 @@
 # Architecture and project structure
 
-How the code is split, and the rules that keep it that way. The full UML (user stories, use cases, sequence and class diagrams) lives on [the `software_engineering` branch](https://github.com/omarTBakr/Basir/tree/software_engineering/software_engineering).
+How the code is split, and the rules that keep it that way. The full UML (user stories, use cases, sequence and class diagrams) lives in [`software_engineering/`](../software_engineering/README.md).
 
 ## Modules
 
@@ -130,6 +130,7 @@ Basir/
 ├── Docker/                         # the local stack: docker-compose.yml + one folder per service
 ├── env/                            # .env.example and stack.env.example (the real files are git-ignored)
 ├── docs/                           # this documentation
+├── software_engineering/           # UML: user stories, use cases, sequence, class and deployment diagrams (PlantUML + PNG, render.sh)
 ├── tests/                          # one test file per module + shared fixtures
 ├── logo/                           # logo (scan + chat) and README image, light / dark SVG + PNG
 │   └── src/                        # generators that rebuild them from the Phase 0 scan

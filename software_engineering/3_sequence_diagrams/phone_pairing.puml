@@ -1,0 +1,68 @@
+@startuml
+!include ../_style.iuml
+title Phone pairing — a phone joins over Wi-Fi and gets its token
+autonumber "<b>0"
+
+actor User as user
+participant "Console\nDevices tab (127.0.0.1:8000)" as devtab
+participant "Ingest app\n(https://<laptop LAN IP>:8001)" as ingest
+participant "PairingRequests\n(in memory, 5 min TTL)" as pairing
+participant "TokenStore\n(devices.json, hashed, TTL 30 days)" as tokens
+participant "Phone page\n(browser on the phone)" as phone
+
+== Reach the laptop ==
+user -> devtab : open Devices
+devtab --> user : QR code + URL of the phone listener\n(the LAN or hotspot address, self-signed certificate)
+user -> phone : scan the QR, accept the certificate
+phone -> ingest : GET /
+ingest -> pairing : seen(phone address)
+ingest --> phone : phone page
+devtab -> pairing : last_visit()
+devtab --> user : step 2 of 4: "a phone opened the page"
+
+== Ask to pair ==
+phone -> ingest : POST /pair {device, label}
+ingest -> pairing : open(device, label, address)
+pairing --> ingest : PairRequest{id, 4-digit code, pending}
+ingest --> phone : {request_id, code, status: pending}
+phone --> user : shows the code
+loop every second until decided
+  phone -> ingest : GET /pair/{request_id}
+  ingest -> pairing : collect(request_id)
+  ingest --> phone : {status: pending}
+end
+
+== Approve on the laptop ==
+devtab --> user : pending request: device, label, address, **code**
+user -> devtab : the code matches → Approve\n(or Deny)
+devtab -> pairing : approve(request_id)
+pairing -> tokens : create(device)
+tokens --> pairing : "bsr_…" (only the sha256 is stored, with created_at / expires_at)
+pairing --> devtab : approved
+phone -> ingest : GET /pair/{request_id}
+ingest -> pairing : collect(request_id)
+pairing --> ingest : {status: approved, token} (handed over once)
+ingest --> phone : token
+phone -> phone : keep the token in localStorage
+
+== Stream ==
+phone -> ingest : WebSocket /ws/stream/{device}
+phone -> ingest : {"type": "auth", "token": "bsr_…"} as the first message
+ingest -> tokens : verify(device, token)
+alt valid and not expired
+  tokens --> ingest : ok
+  ingest --> phone : accepted, frames flow (see async_ingest)
+else wrong, expired, revoked, or ?token= in the URL
+  ingest --> phone : close 1008 (policy violation)
+  phone --> user : "pair again from the Devices tab"
+end
+
+== Later ==
+user -> devtab : Revoke device
+devtab -> tokens : revoke(device)
+note right of tokens
+  devices.json is written with a per-file lock,
+  a temp file, fsync and an atomic replace.
+  Tokens are never logged (RedactSecretsFilter).
+end note
+@enduml
